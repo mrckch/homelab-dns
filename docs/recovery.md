@@ -100,7 +100,7 @@ ssh root@<VM-IP>
 # 3. Secrets hinterlegen (siehe Abschnitt unten)
 
 # 4. Bootstrap ausfuehren
-curl -fsSL https://raw.githubusercontent.com/<USER>/<REPO>/main/scripts/bootstrap.sh \
+curl -fsSL https://raw.githubusercontent.com/mrckch/homelab-dns/main/scripts/bootstrap.sh \
   -o /tmp/bootstrap.sh
 chmod +x /tmp/bootstrap.sh
 

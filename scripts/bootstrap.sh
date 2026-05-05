@@ -172,7 +172,7 @@ log "Installing Docker..."
 if [[ -f "${SCRIPT_DIR}/install-docker.sh" ]]; then
     bash "${SCRIPT_DIR}/install-docker.sh"
 else
-    curl -fsSL "https://raw.githubusercontent.com/${REPO_URL:-<USER>/<REPO>}/main/scripts/install-docker.sh" \
+    curl -fsSL "https://raw.githubusercontent.com/${REPO_URL:-mrckch/homelab-dns}/main/scripts/install-docker.sh" \
         -o /tmp/install-docker.sh
     bash /tmp/install-docker.sh
     rm -f /tmp/install-docker.sh
@@ -194,7 +194,7 @@ else
             CLONE_URL="${REPO_URL}"
         else
             echo "ERROR: --repo is required for initial clone."
-            echo "Usage: --repo=github.com/<USER>/<REPO>"
+            echo "Usage: --repo=github.com/mrckch/homelab-dns"
             echo "The PAT will be injected automatically for HTTPS clone."
             exit 1
         fi
@@ -219,7 +219,7 @@ else
             SSH_URL="${SSH_URL%.git}.git"
         else
             echo "ERROR: --repo is required for initial clone."
-            echo "Usage: --repo=github.com/<USER>/<REPO>"
+            echo "Usage: --repo=github.com/mrckch/homelab-dns"
             exit 1
         fi
         GIT_SSH_COMMAND="ssh -i ${DEPLOY_KEY_FILE} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
