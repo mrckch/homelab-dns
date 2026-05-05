@@ -42,7 +42,7 @@ Bei Ausfall einer Instanz uebernimmt die andere automatisch (Client-seitiges Fai
 # Auf der frisch installierten Debian-12-VM (als root):
 # 1. Secrets manuell hinterlegen (siehe docs/recovery.md)
 # 2. Bootstrap ausfuehren:
-curl -fsSL https://raw.githubusercontent.com/<USER>/<REPO>/main/scripts/bootstrap.sh -o /tmp/bootstrap.sh
+curl -fsSL https://raw.githubusercontent.com/mrckch/homelab-dns/main/scripts/bootstrap.sh -o /tmp/bootstrap.sh
 chmod +x /tmp/bootstrap.sh
 
 # Pi-hole A (Master):
