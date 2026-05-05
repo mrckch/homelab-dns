@@ -1,0 +1,38 @@
+services:
+  pihole:
+    image: pihole/pihole:2025.03.0
+    container_name: pihole
+    hostname: ${PIHOLE_HOSTNAME:-pihole}
+    restart: unless-stopped
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "80:80/tcp"
+    environment:
+      TZ: ${TZ}
+      FTLCONF_webserver_api_password: ${FTLCONF_webserver_api_password}
+      FTLCONF_LOCAL_IPV4: ${FTLCONF_LOCAL_IPV4}
+      FTLCONF_dns_upstreams: ${FTLCONF_dns_upstreams}
+      FTLCONF_dns_dnssec: ${FTLCONF_dns_dnssec:-true}
+      FTLCONF_dns_revServers: ${FTLCONF_dns_revServers:-}
+    volumes:
+      - ./etc-pihole:/etc/pihole
+      - ./etc-dnsmasq.d:/etc/dnsmasq.d
+    cap_add:
+      - NET_ADMIN
+      - SYS_NICE
+    healthcheck:
+      test: ["CMD", "dig", "+norecurse", "+retry=0", "@127.0.0.1", "localhost"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  recovery-site:
+    image: caddy:2-alpine
+    container_name: recovery-site
+    restart: unless-stopped
+    ports:
+      - "8080:80/tcp"
+    volumes:
+      - ../recovery-site:/usr/share/caddy:ro

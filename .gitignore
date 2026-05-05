@@ -1,0 +1,27 @@
+# Environment files with secrets
+.env
+!.env.example
+
+# Archives (except teleporter backup)
+*.tar.gz
+*.zip
+!backups/teleporter-latest.zip
+
+# Pi-hole data directories (only exist on VMs, not in repo)
+compose/etc-pihole/
+compose/etc-dnsmasq.d/
+
+# Editor and IDE files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+*.sublime-*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pi-hole Recovery</title>
+    <style>
+        :root {
+            --bg: #1a1a2e;
+            --surface: #16213e;
+            --border: #0f3460;
+            --text: #e0e0e0;
+            --text-muted: #a0a0a0;
+            --accent: #e94560;
+            --accent-hover: #ff6b81;
+            --code-bg: #0d1117;
+            --success: #4caf50;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            padding: 2rem;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        h1 { color: var(--accent); margin-bottom: 0.5rem; font-size: 1.8rem; }
+        h2 {
+            color: var(--accent);
+            margin: 2rem 0 1rem;
+            padding-bottom: 0.3rem;
+            border-bottom: 1px solid var(--border);
+            font-size: 1.3rem;
+        }
+        .status-box {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+        }
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.4rem 0;
+            border-bottom: 1px solid var(--border);
+        }
+        .status-row:last-child { border-bottom: none; }
+        .status-label { color: var(--text-muted); }
+        .status-value { font-weight: bold; }
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { color: var(--accent-hover); text-decoration: underline; }
+        .cmd-block {
+            position: relative;
+            background: var(--code-bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 1rem;
+            margin: 0.5rem 0;
+            font-family: "Fira Code", "Cascadia Code", monospace;
+            font-size: 0.9rem;
+            overflow-x: auto;
+        }
+        .cmd-block code { color: var(--text); white-space: pre; }
+        .copy-btn {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            background: var(--border);
+            color: var(--text);
+            border: none;
+            border-radius: 4px;
+            padding: 0.3rem 0.6rem;
+            cursor: pointer;
+            font-size: 0.75rem;
+        }
+        .copy-btn:hover { background: var(--accent); }
+        .copy-btn.copied { background: var(--success); }
+        .warning {
+            background: #2d1b00;
+            border: 1px solid #e65100;
+            border-radius: 6px;
+            padding: 1rem;
+            margin: 1rem 0;
+        }
+        .section { margin-bottom: 2rem; }
+        ul { padding-left: 1.5rem; margin: 0.5rem 0; }
+        li { margin: 0.3rem 0; }
+    </style>
+</head>
+<body>
+
+<h1>Pi-hole Recovery Console</h1>
+<p style="color: var(--text-muted);">Homelab DNS — Notfall- und Wartungsseite</p>
+
+<h2>Status dieser VM</h2>
+<div class="status-box">
+    <div class="status-row">
+        <span class="status-label">Hostname</span>
+        <span class="status-value" id="hostname">wird ermittelt...</span>
+    </div>
+    <div class="status-row">
+        <span class="status-label">IP-Adresse</span>
+        <span class="status-value" id="ip-addr">wird ermittelt...</span>
+    </div>
+    <div class="status-row">
+        <span class="status-label">Rolle</span>
+        <span class="status-value" id="role">wird ermittelt...</span>
+    </div>
+    <div class="status-row">
+        <span class="status-label">Pi-hole Admin</span>
+        <span class="status-value"><a id="admin-link" href="/admin">Admin-UI oeffnen</a></span>
+    </div>
+</div>
+
+<h2>Haeufige Befehle</h2>
+
+<div class="section">
+    <p><strong>Container-Status pruefen</strong></p>
+    <div class="cmd-block">
+        <code>cd /opt/homelab-dns/compose && docker compose ps</code>
+        <button class="copy-btn" onclick="copyCmd(this)">Copy</button>
+    </div>
+
+    <p><strong>Pi-hole neu starten</strong></p>
+    <div class="cmd-block">
+        <code>cd /opt/homelab-dns/compose && docker compose down && docker compose up -d</code>
+        <button class="copy-btn" onclick="copyCmd(this)">Copy</button>
+    </div>
+
+    <p><strong>Container-Logs ansehen</strong></p>
+    <div class="cmd-block">
+        <code>cd /opt/homelab-dns/compose && docker compose logs -f --tail=100 pihole</code>
+        <button class="copy-btn" onclick="copyCmd(this)">Copy</button>
+    </div>
+
+    <p><strong>DNS-Aufloesung testen</strong></p>
+    <div class="cmd-block">
+        <code>dig @127.0.0.1 example.com</code>
+        <button class="copy-btn" onclick="copyCmd(this)">Copy</button>
+    </div>
+
+    <p><strong>Sync manuell ausfuehren</strong></p>
+    <div class="cmd-block" id="sync-cmd-block">
+        <code id="sync-cmd">wird ermittelt...</code>
+        <button class="copy-btn" onclick="copyCmd(this)">Copy</button>
+    </div>
+
+    <p><strong>Image aktualisieren</strong></p>
+    <div class="cmd-block">
+        <code>cd /opt/homelab-dns/compose && docker compose pull && docker compose up -d</code>
+        <button class="copy-btn" onclick="copyCmd(this)">Copy</button>
+    </div>
+
+    <p><strong>Sync-Logs pruefen</strong></p>
+    <div class="cmd-block" id="log-cmd-block">
+        <code id="log-cmd">wird ermittelt...</code>
+        <button class="copy-btn" onclick="copyCmd(this)">Copy</button>
+    </div>
+</div>
+
+<h2>Recovery-Anleitung</h2>
+
+<div class="section">
+    <ul>
+        <li><strong>Container kaputt?</strong> <code>docker compose down && docker compose up -d</code></li>
+        <li><strong>VM kaputt?</strong> Aus NAS-Snapshot wiederherstellen oder <code>bootstrap.sh</code> ausfuehren</li>
+        <li><strong>Host tot?</strong> Neue VM aufsetzen, Secrets aus Passwort-Manager, <code>bootstrap.sh</code></li>
+    </ul>
+    <p style="margin-top: 1rem;">
+        Vollstaendige Anleitung:
+        <a id="repo-link" href="#" target="_blank">Recovery-Dokumentation auf GitHub</a>
+    </p>
+</div>
+
+<h2>Wo finde ich die Secrets?</h2>
+
+<div class="warning">
+    <strong>Secrets werden NIEMALS auf dieser Seite angezeigt.</strong>
+    <ul style="margin-top: 0.5rem;">
+        <li><strong>Pi-hole Webpasswort:</strong> Im Passwort-Manager unter "Homelab / Pi-hole"</li>
+        <li><strong>GitHub PAT</strong> (nur Master): Passwort-Manager unter "Homelab / GitHub PAT"</li>
+        <li><strong>SSH Deploy-Key</strong> (nur Follower): Passwort-Manager unter "Homelab / Deploy Key"</li>
+    </ul>
+    <p style="margin-top: 0.5rem; color: var(--text-muted);">
+        Bei Recovery: Secrets manuell aus dem Passwort-Manager auf die VM kopieren.
+        Siehe <code>docs/recovery.md</code> fuer die genauen Pfade und Berechtigungen.
+    </p>
+</div>
+
+<script>
+    (function() {
+        var host = window.location.hostname;
+        var hostnameEl = document.getElementById('hostname');
+        var ipEl = document.getElementById('ip-addr');
+        var roleEl = document.getElementById('role');
+        var adminLink = document.getElementById('admin-link');
+        var syncCmd = document.getElementById('sync-cmd');
+        var logCmd = document.getElementById('log-cmd');
+        var repoLink = document.getElementById('repo-link');
+
+        ipEl.textContent = host;
+        adminLink.href = 'http://' + host + '/admin';
+
+        var isA = false;
+        var pageTitle = document.title;
+
+        // Detect role from hostname or page context
+        // On the actual VM, we rely on the IP to distinguish.
+        // Users should set the repo URL below:
+        var repoUrl = 'https://github.com/<USER>/<REPO>';
+        repoLink.href = repoUrl + '/blob/main/docs/recovery.md';
+
+        // Try to determine hostname via a fetch to Pi-hole API
+        fetch('http://' + host + '/api/info')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var name = (data && data.hostname) || '';
+                if (name) {
+                    hostnameEl.textContent = name;
+                    if (name.indexOf('pihole-a') !== -1) {
+                        isA = true;
+                        roleEl.textContent = 'Master (Schreib-Instanz)';
+                        roleEl.style.color = '#e94560';
+                    } else {
+                        roleEl.textContent = 'Follower (Read-Only)';
+                        roleEl.style.color = '#4caf50';
+                    }
+                } else {
+                    hostnameEl.textContent = host;
+                    roleEl.textContent = 'Unbekannt';
+                }
+                updateSyncCmds(isA);
+            })
+            .catch(function() {
+                hostnameEl.textContent = host;
+                roleEl.textContent = 'Pi-hole API nicht erreichbar';
+                roleEl.style.color = '#ff9800';
+                updateSyncCmds(false);
+            });
+
+        function updateSyncCmds(masterRole) {
+            if (masterRole) {
+                syncCmd.textContent = '/opt/homelab-dns/scripts/teleporter-export.sh';
+                logCmd.textContent = 'tail -30 /var/log/pihole-sync/export.log';
+            } else {
+                syncCmd.textContent = '/opt/homelab-dns/scripts/teleporter-import.sh';
+                logCmd.textContent = 'tail -30 /var/log/pihole-sync/import.log';
+            }
+        }
+    })();
+
+    function copyCmd(btn) {
+        var codeEl = btn.parentElement.querySelector('code');
+        var text = codeEl.textContent;
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(text).then(function() {
+                btn.textContent = 'Copied!';
+                btn.classList.add('copied');
+                setTimeout(function() {
+                    btn.textContent = 'Copy';
+                    btn.classList.remove('copied');
+                }, 1500);
+            });
+        } else {
+            var range = document.createRange();
+            range.selectNodeContents(codeEl);
+            var sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+            document.execCommand('copy');
+            sel.removeAllRanges();
+            btn.textContent = 'Copied!';
+            btn.classList.add('copied');
+            setTimeout(function() {
+                btn.textContent = 'Copy';
+                btn.classList.remove('copied');
+            }, 1500);
+        }
+    }
+</script>
+
+</body>
+</html>
