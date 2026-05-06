@@ -166,7 +166,7 @@ apt-get install -y --no-install-recommends \
     unattended-upgrades \
     apt-listchanges
 
-# --- Step 2: Disable systemd-resolved (free port 53) ---
+# --- Step 2: Disable systemd-resolved und dhcpcd (Port 53 freigeben, Konflikte vermeiden) ---
 
 log "Disabling systemd-resolved..."
 if systemctl is-active --quiet systemd-resolved 2>/dev/null; then
@@ -174,7 +174,13 @@ if systemctl is-active --quiet systemd-resolved 2>/dev/null; then
     systemctl disable systemd-resolved
 fi
 
-if [[ -L /etc/resolv.conf ]]; then
+log "Disabling dhcpcd (replaced by systemd-networkd)..."
+if systemctl is-active --quiet dhcpcd 2>/dev/null; then
+    systemctl stop dhcpcd
+    systemctl disable dhcpcd
+fi
+
+if [[ -L /etc/resolv.conf ]] || [[ -f /etc/resolv.conf ]]; then
     rm -f /etc/resolv.conf
 fi
 
@@ -182,8 +188,10 @@ cat > /etc/resolv.conf <<EOF
 nameserver ${GATEWAY}
 nameserver 1.1.1.1
 EOF
+# Schutz vor Ueberschreiben durch dhcpcd
+chattr +i /etc/resolv.conf 2>/dev/null || true
 
-log "systemd-resolved disabled. Using gateway and 1.1.1.1 for bootstrap DNS."
+log "systemd-resolved und dhcpcd deaktiviert."
 
 # --- Step 3: Configure static IP via systemd-networkd ---
 
@@ -238,10 +246,24 @@ fi
 log "Setting up repository at ${REPO_DIR}..."
 mkdir -p "${REPO_DIR}"
 
+git_with_retry() {
+    local attempt=1
+    local max=5
+    until git "$@"; do
+        if [[ $attempt -ge $max ]]; then
+            echo "ERROR: git $* failed after ${max} attempts."
+            return 1
+        fi
+        log "git $* fehlgeschlagen, warte 5s (Versuch ${attempt}/${max})..."
+        sleep 5
+        ((attempt++))
+    done
+}
+
 if [[ -d "${REPO_DIR}/.git" ]]; then
     log "Repository already exists, pulling latest changes..."
     cd "${REPO_DIR}"
-    git pull
+    git_with_retry pull
 else
     if [[ "$ROLE" == "a" ]]; then
         PAT="$(cat "$GITHUB_TOKEN_FILE" | tr -d '[:space:]')"
