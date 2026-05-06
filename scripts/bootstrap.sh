@@ -157,6 +157,9 @@ EOF
 systemctl enable systemd-networkd
 systemctl restart systemd-networkd
 
+log "Waiting for network to stabilise..."
+sleep 5
+
 # --- Step 4: Set hostname ---
 
 log "Setting hostname to ${HOSTNAME}..."
