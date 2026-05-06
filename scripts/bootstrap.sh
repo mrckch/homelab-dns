@@ -48,9 +48,57 @@ for arg in "$@"; do
     esac
 done
 
+# --- Interactive mode if arguments are missing ---
+
 if [[ -z "$ROLE" || -z "$IP" || -z "$GATEWAY" ]]; then
-    echo "ERROR: --role, --ip, and --gateway are required."
-    usage
+    echo ""
+    echo "╔══════════════════════════════════════════╗"
+    echo "║      Pi-hole Homelab Bootstrap           ║"
+    echo "╚══════════════════════════════════════════╝"
+    echo ""
+
+    if [[ -z "$ROLE" ]]; then
+        while true; do
+            read -rp "Rolle dieser VM [a = Master / b = Follower]: " ROLE
+            [[ "$ROLE" == "a" || "$ROLE" == "b" ]] && break
+            echo "Bitte 'a' oder 'b' eingeben."
+        done
+    fi
+
+    if [[ -z "$IP" ]]; then
+        # Aktuell erkannte IPs als Hinweis anzeigen
+        CURRENT_IPS="$(ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v 127 | tr '\n' '  ')"
+        read -rp "Statische IP fuer diese VM [aktuell: ${CURRENT_IPS}]: " IP
+    fi
+
+    if [[ -z "$GATEWAY" ]]; then
+        DEFAULT_GW="$(ip route | grep '^default' | awk '{print $3}' | head -1)"
+        read -rp "Gateway (Router-IP) [erkannt: ${DEFAULT_GW}]: " input_gw
+        GATEWAY="${input_gw:-$DEFAULT_GW}"
+    fi
+
+    # Netzwerk-Interface erkennen und vorschlagen
+    DEFAULT_IFACE="$(ip route | grep '^default' | awk '{print $5}' | head -1)"
+    if [[ "$IFACE" == "eth0" && -n "$DEFAULT_IFACE" ]]; then
+        read -rp "Netzwerk-Interface [erkannt: ${DEFAULT_IFACE}]: " input_iface
+        IFACE="${input_iface:-$DEFAULT_IFACE}"
+    fi
+
+    if [[ -z "$REPO_URL" ]]; then
+        read -rp "GitHub Repo [github.com/mrckch/homelab-dns]: " input_repo
+        REPO_URL="${input_repo:-github.com/mrckch/homelab-dns}"
+    fi
+
+    echo ""
+    echo "Zusammenfassung:"
+    echo "  Rolle:     pihole-${ROLE}"
+    echo "  IP:        ${IP}/24"
+    echo "  Gateway:   ${GATEWAY}"
+    echo "  Interface: ${IFACE}"
+    echo "  Repo:      ${REPO_URL}"
+    echo ""
+    read -rp "Fortfahren? [j/N]: " confirm
+    [[ "$confirm" =~ ^[jJyY]$ ]] || { echo "Abgebrochen."; exit 0; }
 fi
 
 if [[ "$ROLE" != "a" && "$ROLE" != "b" ]]; then
