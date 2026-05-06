@@ -274,6 +274,8 @@ git_with_retry() {
     done
 }
 
+wait_for_dns
+
 if [[ -d "${REPO_DIR}/.git" ]]; then
     log "Repository already exists, pulling latest changes..."
     cd "${REPO_DIR}"
