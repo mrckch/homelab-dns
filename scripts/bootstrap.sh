@@ -187,26 +187,28 @@ log "systemd-resolved disabled. Using gateway and 1.1.1.1 for bootstrap DNS."
 
 # --- Step 3: Configure static IP via systemd-networkd ---
 
-log "Configuring static IP ${IP}/${CIDR} on ${IFACE}..."
-
 mkdir -p /etc/systemd/network
 
-cat > "/etc/systemd/network/10-${IFACE}.network" <<EOF
-[Match]
+NETWORK_FILE="/etc/systemd/network/10-${IFACE}.network"
+NETWORK_CONTENT="[Match]
 Name=${IFACE}
 
 [Network]
 Address=${IP}/${CIDR}
 Gateway=${GATEWAY}
 DNS=${GATEWAY}
-DNS=1.1.1.1
-EOF
+DNS=1.1.1.1"
 
-systemctl enable systemd-networkd
-systemctl restart systemd-networkd
-
-log "Waiting for network to stabilise..."
-sleep 5
+if [[ ! -f "$NETWORK_FILE" ]] || [[ "$(cat "$NETWORK_FILE")" != "$NETWORK_CONTENT" ]]; then
+    log "Configuring static IP ${IP}/${CIDR} on ${IFACE}..."
+    echo "$NETWORK_CONTENT" > "$NETWORK_FILE"
+    systemctl enable systemd-networkd
+    systemctl restart systemd-networkd
+    log "Waiting for network to stabilise..."
+    sleep 5
+else
+    log "Network config unchanged, skipping restart."
+fi
 
 # --- Step 4: Set hostname ---
 
