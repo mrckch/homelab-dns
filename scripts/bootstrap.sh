@@ -172,7 +172,9 @@ log "Installing Docker..."
 if [[ -f "${SCRIPT_DIR}/install-docker.sh" ]]; then
     bash "${SCRIPT_DIR}/install-docker.sh"
 else
-    curl -fsSL "https://raw.githubusercontent.com/${REPO_URL:-mrckch/homelab-dns}/main/scripts/install-docker.sh" \
+    # Strip leading "github.com/" from REPO_URL to build raw URL correctly
+    RAW_REPO="${REPO_URL#*github.com/}"
+    curl -fsSL "https://raw.githubusercontent.com/${RAW_REPO:-mrckch/homelab-dns}/main/scripts/install-docker.sh" \
         -o /tmp/install-docker.sh
     bash /tmp/install-docker.sh
     rm -f /tmp/install-docker.sh
