@@ -17,6 +17,8 @@ case "$CURRENT_HOSTNAME" in
         cat > "$CRON_FILE" <<EOF
 # Nightly Teleporter export at 03:00
 0 3 * * * root ${REPO_DIR}/scripts/teleporter-export.sh >> /var/log/pihole-sync/export.log 2>&1
+# System status fuer Recovery-Site alle 5 Minuten aktualisieren
+*/5 * * * * root ${REPO_DIR}/scripts/update-site-info.sh >> /var/log/pihole-sync/site-info.log 2>&1
 EOF
         ;;
     pihole-b)
@@ -24,6 +26,8 @@ EOF
         cat > "$CRON_FILE" <<EOF
 # Nightly Teleporter import at 03:30
 30 3 * * * root ${REPO_DIR}/scripts/teleporter-import.sh >> /var/log/pihole-sync/import.log 2>&1
+# System status fuer Recovery-Site alle 5 Minuten aktualisieren
+*/5 * * * * root ${REPO_DIR}/scripts/update-site-info.sh >> /var/log/pihole-sync/site-info.log 2>&1
 EOF
         ;;
     *)

@@ -11,6 +11,9 @@
 compose/etc-pihole/
 compose/etc-dnsmasq.d/
 
+# Generated site info (created locally by update-site-info.sh)
+recovery-site/system-status.json
+
 # Editor and IDE files
 *.swp
 *.swo

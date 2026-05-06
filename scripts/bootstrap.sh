@@ -387,6 +387,13 @@ cat > /etc/logrotate.d/pihole-sync <<'EOF'
 }
 EOF
 
+# --- Step 11: Initiale site-info.json generieren ---
+
+if [[ -f "${REPO_DIR}/scripts/update-site-info.sh" ]]; then
+    log "Generating initial system status for recovery site..."
+    bash "${REPO_DIR}/scripts/update-site-info.sh" || true
+fi
+
 # --- Done ---
 
 log "=========================================="
