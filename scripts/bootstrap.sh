@@ -207,13 +207,27 @@ Gateway=${GATEWAY}
 DNS=${GATEWAY}
 DNS=1.1.1.1"
 
+wait_for_dns() {
+    local attempt=0
+    local max=24
+    log "Warte auf DNS-Verfuegbarkeit..."
+    until dig +short +time=2 github.com @1.1.1.1 &>/dev/null; do
+        if [[ $attempt -ge $max ]]; then
+            log "FEHLER: DNS nach $((max * 5))s nicht erreichbar. Netzwerk pruefen."
+            return 1
+        fi
+        sleep 5
+        ((attempt++))
+    done
+    log "DNS bereit (nach $((attempt * 5))s)."
+}
+
 if [[ ! -f "$NETWORK_FILE" ]] || [[ "$(cat "$NETWORK_FILE")" != "$NETWORK_CONTENT" ]]; then
     log "Configuring static IP ${IP}/${CIDR} on ${IFACE}..."
     echo "$NETWORK_CONTENT" > "$NETWORK_FILE"
     systemctl enable systemd-networkd
     systemctl restart systemd-networkd
-    log "Waiting for network to stabilise..."
-    sleep 5
+    wait_for_dns
 else
     log "Network config unchanged, skipping restart."
 fi
