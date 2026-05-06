@@ -352,33 +352,72 @@ EOF
 log "=========================================="
 log "Bootstrap complete for ${HOSTNAME} (role=${ROLE})"
 log "=========================================="
+
+# --- Interactive post-setup assistant ---
+
 echo ""
-echo "Next steps:"
+echo "╔══════════════════════════════════════════╗"
+echo "║       Setup-Assistent                    ║"
+echo "╚══════════════════════════════════════════╝"
 echo ""
-echo "  1. Edit the .env file with your Pi-hole web password:"
-echo "     nano ${REPO_DIR}/compose/.env"
+
+# Schritt A: Pi-hole Passwort setzen
+echo "Schritt 1/3: Pi-hole Web-Passwort setzen"
+echo "-----------------------------------------"
+while true; do
+    read -rsp "  Passwort eingeben (wird nicht angezeigt): " PH_PASS
+    echo ""
+    read -rsp "  Passwort bestaetigen: " PH_PASS2
+    echo ""
+    if [[ "$PH_PASS" == "$PH_PASS2" && -n "$PH_PASS" ]]; then
+        sed -i "s|^FTLCONF_webserver_api_password=.*|FTLCONF_webserver_api_password=${PH_PASS}|" "${REPO_DIR}/compose/.env"
+        echo "  Passwort gesetzt."
+        break
+    else
+        echo "  Passwoerter stimmen nicht ueberein oder leer. Nochmal versuchen."
+    fi
+done
+
 echo ""
-echo "  2. Start Pi-hole:"
-echo "     cd ${REPO_DIR}/compose && docker compose up -d"
+
+# Schritt B: Pi-hole starten
+echo "Schritt 2/3: Pi-hole Container starten"
+echo "----------------------------------------"
+cd "${REPO_DIR}/compose"
+docker compose up -d
 echo ""
-echo "  3. Verify DNS is working:"
-echo "     dig @127.0.0.1 example.com"
+
+# Schritt C: DNS testen
+echo "Schritt 3/3: DNS-Test"
+echo "----------------------"
+echo "  Warte 15 Sekunden bis Pi-hole bereit ist..."
+sleep 15
+
+if dig @127.0.0.1 example.com +short +time=3 &>/dev/null; then
+    echo "  DNS funktioniert."
+else
+    echo "  DNS-Test fehlgeschlagen — Container-Logs pruefen:"
+    echo "  docker compose logs pihole"
+fi
+
 echo ""
-echo "  4. Access Pi-hole Admin UI:"
-echo "     http://${IP}/admin"
+echo "╔══════════════════════════════════════════╗"
+echo "║  Fertig! Pi-hole laeuft.                 ║"
+echo "╚══════════════════════════════════════════╝"
 echo ""
-echo "  5. Access Recovery Site:"
-echo "     http://${IP}:8080"
+echo "  Admin-UI:      http://${IP}/admin"
+echo "  Recovery-Site: http://${IP}:8080"
 echo ""
 if [[ "$ROLE" == "a" ]]; then
-    echo "  6. Configure your adlists, whitelist, and settings in the Admin UI."
-    echo "     This is the MASTER instance — all changes go here."
+    echo "  MASTER: Alle Aenderungen (Adlists, Whitelist etc.) nur hier vornehmen."
     echo ""
-    echo "  7. Test the export sync:"
-    echo "     ${REPO_DIR}/scripts/teleporter-export.sh"
+    echo "  Sync testen:"
+    echo "  ${REPO_DIR}/scripts/teleporter-export.sh"
 fi
 if [[ "$ROLE" == "b" ]]; then
-    echo "  6. The nightly import sync will run automatically at 03:30."
-    echo "     To test manually:"
-    echo "     ${REPO_DIR}/scripts/teleporter-import.sh"
+    echo "  FOLLOWER: Sync laeuft automatisch naechtlich um 03:30."
+    echo ""
+    echo "  Sync manuell testen:"
+    echo "  ${REPO_DIR}/scripts/teleporter-import.sh"
 fi
+echo ""
