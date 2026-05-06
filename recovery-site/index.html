@@ -213,8 +213,8 @@
         var repoUrl = 'https://github.com/mrckch/homelab-dns';
         repoLink.href = repoUrl + '/blob/main/docs/recovery.md';
 
-        // Try to determine hostname via a fetch to Pi-hole API
-        fetch('http://' + host + '/api/info')
+        // Pi-hole Admin laeuft auf Port 80, Recovery-Site auf 8080 — explizit Port 80 ansprechen
+        fetch('http://' + host + ':80/api/info')
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 var name = (data && data.hostname) || '';
