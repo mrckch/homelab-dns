@@ -311,74 +311,75 @@ EOF
 # ────────────────────────────── Network ──────────────────────────────
 
 apply_network() {
-    log "Konfiguriere Netzwerk: $IP/$CIDR auf $IFACE, GW=$GATEWAY"
+    log "Schreibe Netzwerk-Konfiguration: $IP/$CIDR auf $IFACE, GW=$GATEWAY"
 
-    # systemd-resolved deaktivieren (Port 53 freigeben)
-    if systemctl is-active --quiet systemd-resolved 2>/dev/null; then
-        systemctl stop systemd-resolved
-        systemctl disable systemd-resolved
+    # ── 1. Stoere-Pakete entfernen falls installiert (cloud-init, netplan, NM) ──
+    local to_purge=()
+    dpkg -s cloud-init        &>/dev/null && to_purge+=(cloud-init)
+    dpkg -s netplan.io        &>/dev/null && to_purge+=(netplan.io)
+    dpkg -s network-manager   &>/dev/null && to_purge+=(network-manager)
+    if [[ ${#to_purge[@]} -gt 0 ]]; then
+        log "Entferne alternative Netzwerk-Manager: ${to_purge[*]}"
+        DEBIAN_FRONTEND=noninteractive apt-get -y purge "${to_purge[@]}" 2>/dev/null || true
+        DEBIAN_FRONTEND=noninteractive apt-get -y autoremove 2>/dev/null || true
     fi
 
-    # dhcpcd deaktivieren falls aktiv
-    if systemctl is-active --quiet dhcpcd 2>/dev/null; then
-        systemctl stop dhcpcd
-        systemctl disable dhcpcd
+    # ── 2. Konkurrierende Dienste deaktivieren ──
+    local svc
+    for svc in systemd-resolved dhcpcd networking NetworkManager cloud-init cloud-init-local cloud-config cloud-final; do
+        if systemctl is-enabled --quiet "$svc" 2>/dev/null \
+           || systemctl is-active  --quiet "$svc" 2>/dev/null; then
+            log "Deaktiviere $svc"
+            systemctl disable --now "$svc" 2>/dev/null || true
+            systemctl mask "$svc" 2>/dev/null || true
+        fi
+    done
+
+    # ── 3. cloud-init config-residue ──
+    rm -rf /etc/cloud/cloud.cfg.d/*subiquity* 2>/dev/null || true
+    [[ -d /etc/cloud ]] && touch /etc/cloud/cloud-init.disabled
+
+    # ── 4. /etc/network/interfaces.d/ saeubern ──
+    if [[ -d /etc/network/interfaces.d ]]; then
+        rm -f /etc/network/interfaces.d/* 2>/dev/null || true
     fi
 
-    # ifupdown networking.service deaktivieren (Debian-Default, blockiert sonst networkd)
-    if systemctl is-enabled --quiet networking.service 2>/dev/null \
-       || systemctl is-active --quiet networking.service 2>/dev/null; then
-        log "Deaktiviere networking.service (ifupdown) zugunsten von systemd-networkd"
-        systemctl disable --now networking.service 2>/dev/null || true
+    # ── 5. /etc/network/interfaces auf Loopback ──
+    if [[ -f /etc/network/interfaces ]]; then
+        cp /etc/network/interfaces /etc/network/interfaces.bak.$(date +%s) 2>/dev/null || true
     fi
-
-    # /etc/network/interfaces auf Loopback-only reduzieren
-    if [[ -f /etc/network/interfaces ]] && grep -qE "^[[:space:]]*(auto|iface)[[:space:]]+(eth0|ens|enp)" /etc/network/interfaces; then
-        log "Bereinige /etc/network/interfaces (entferne ${IFACE}-Konfiguration)"
-        cp /etc/network/interfaces /etc/network/interfaces.bak.$(date +%s)
-        cat > /etc/network/interfaces <<'EOF'
-# Managed by systemd-networkd; konfiguriert in /etc/systemd/network/
+    cat > /etc/network/interfaces <<'EOF'
+# Managed by systemd-networkd; siehe /etc/systemd/network/
 source /etc/network/interfaces.d/*
 auto lo
 iface lo inet loopback
 EOF
-    fi
 
-    # Statische resolv.conf — immutable-Flag von alten Laeufen entfernen
+    # ── 6. resolv.conf statisch + immutable ──
     chattr -i /etc/resolv.conf 2>/dev/null || true
-    [[ -e /etc/resolv.conf ]] && rm -f /etc/resolv.conf
+    rm -f /etc/resolv.conf
     cat > /etc/resolv.conf <<EOF
 nameserver $GATEWAY
 nameserver 1.1.1.1
 EOF
     chattr +i /etc/resolv.conf 2>/dev/null || true
 
-    # systemd-networkd config
+    # ── 7. systemd-networkd Config ──
+    rm -f /etc/systemd/network/*.network 2>/dev/null || true
     mkdir -p /etc/systemd/network
-    local network_file="/etc/systemd/network/10-${IFACE}.network"
-    local network_content
-    network_content="[Match]
+    cat > "/etc/systemd/network/10-${IFACE}.network" <<EOF
+[Match]
 Name=${IFACE}
 
 [Network]
 Address=${IP}/${CIDR}
 Gateway=${GATEWAY}
 DNS=${GATEWAY}
-DNS=1.1.1.1"
+DNS=1.1.1.1
+EOF
 
-    if [[ ! -f "$network_file" ]] || [[ "$(cat "$network_file")" != "$network_content" ]]; then
-        echo "$network_content" > "$network_file"
-        systemctl enable systemd-networkd
-        # DHCP-Lease auf dem Interface entfernen, damit networkd statisch greifen kann
-        ip addr flush dev "$IFACE" 2>/dev/null || true
-        systemctl restart systemd-networkd
-        log "systemd-networkd neu gestartet"
-    else
-        # Selbst bei unveraenderter Config: networking.service-Disable braucht Restart
-        ip addr flush dev "$IFACE" 2>/dev/null || true
-        systemctl restart systemd-networkd
-        log "Netzwerk-Config unveraendert, networkd dennoch neu gestartet"
-    fi
+    systemctl enable systemd-networkd
+    log "Netzwerk-Konfiguration geschrieben (greift nach Reboot)"
 }
 
 wait_for_dns() {
@@ -712,11 +713,21 @@ run_phase2() {
     log "Phase 2: Setup für $HOSTNAME (Rolle: $ROLE)"
     log "════════════════════════════════════════════"
 
-    # Defensive: Netzwerk-Konfig erneut anwenden — falls Phase 1 ueber alten
-    # Bootstrap (ohne networking.service-Disable) lief, ist die VM evtl. noch
-    # auf der DHCP-IP. apply_network ist idempotent und korrigiert das.
+    # Defensive: Netzwerk-Konfig (re-)schreiben — idempotent
     ensure_tools
     apply_network
+
+    # Pruefen ob die IP wirklich greift. Falls nicht, Reboot triggern.
+    local cur_ip
+    cur_ip=$(ip -4 addr show "$IFACE" 2>/dev/null \
+        | awk '/inet /{print $2}' | head -1 | cut -d/ -f1)
+    if [[ "$cur_ip" != "$IP" ]]; then
+        log "Aktuelle IP '$cur_ip' != Soll-IP '$IP'. Reboote fuer sauberen Zustand."
+        log "Resume-Service uebernimmt nach Boot. Reconnect: ssh root@$IP"
+        ( sleep 3 && systemctl reboot ) &
+        exit 0
+    fi
+    log "IP korrekt: $cur_ip"
 
     wait_for_dns
     step_install_packages
@@ -783,28 +794,32 @@ run_phase1() {
     apply_network
 
     if [[ "$cur_ip" != "$IP" ]]; then
-        # IP wechselt — Resume-Service aufsetzen
+        # IP wechselt — Resume-Service installieren, REBOOT triggern
         sed -i 's/^PHASE=.*/PHASE=2/' "$CONF_FILE"
         install_resume_service
 
-        whiptail --backtitle "DNS Homelab Bootstrap" --title "IP-Wechsel" --msgbox \
+        whiptail --backtitle "DNS Homelab Bootstrap" --title "Reboot fuer IP-Wechsel" --msgbox \
 "Die IP wechselt von $cur_ip nach $IP.
 
-Phase 2 laeuft NACH dem IP-Wechsel automatisch
-weiter (systemd-Service: dns-bootstrap-resume).
+Die VM wird in 5 Sekunden NEU GESTARTET. Damit
+greift die statische IP-Konfiguration garantiert
+sauber, ohne Konflikte mit DHCP-Resten.
+
+Phase 2 laeuft nach dem Boot automatisch weiter
+(systemd-Service dns-bootstrap-resume).
 
 Naechste Schritte:
-  1. Diese SSH-Session schliessen
-  2. Ca. 30 Sekunden warten
-  3. Per SSH zur neuen IP verbinden:  ssh root@$IP
-  4. Logs verfolgen:  tail -f $LOG_FILE
+  1. Diese SSH-Session wird gleich geschlossen
+  2. Ca. 60 Sekunden warten (Reboot dauert)
+  3. Per SSH zur NEUEN IP verbinden: ssh root@$IP
+  4. Live-Log verfolgen:  tail -f $LOG_FILE
 
-Nach ~3 Min sollte $HOSTNAME komplett laufen.
-" 20 70
+Nach ~3 Min ist $HOSTNAME komplett fertig.
+" 22 70
 
-        log "Phase 1 fertig — IP wechselt, Phase 2 via systemd"
-        # Trigger network change
-        systemctl restart systemd-networkd
+        log "Phase 1 fertig — VM rebootet jetzt fuer sauberen IP-Wechsel"
+        sync
+        ( sleep 5 && systemctl reboot ) &
         exit 0
     fi
 
