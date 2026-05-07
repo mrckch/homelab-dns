@@ -325,6 +325,25 @@ apply_network() {
         systemctl disable dhcpcd
     fi
 
+    # ifupdown networking.service deaktivieren (Debian-Default, blockiert sonst networkd)
+    if systemctl is-enabled --quiet networking.service 2>/dev/null \
+       || systemctl is-active --quiet networking.service 2>/dev/null; then
+        log "Deaktiviere networking.service (ifupdown) zugunsten von systemd-networkd"
+        systemctl disable --now networking.service 2>/dev/null || true
+    fi
+
+    # /etc/network/interfaces auf Loopback-only reduzieren
+    if [[ -f /etc/network/interfaces ]] && grep -qE "^[[:space:]]*(auto|iface)[[:space:]]+(eth0|ens|enp)" /etc/network/interfaces; then
+        log "Bereinige /etc/network/interfaces (entferne ${IFACE}-Konfiguration)"
+        cp /etc/network/interfaces /etc/network/interfaces.bak.$(date +%s)
+        cat > /etc/network/interfaces <<'EOF'
+# Managed by systemd-networkd; konfiguriert in /etc/systemd/network/
+source /etc/network/interfaces.d/*
+auto lo
+iface lo inet loopback
+EOF
+    fi
+
     # Statische resolv.conf — immutable-Flag von alten Laeufen entfernen
     chattr -i /etc/resolv.conf 2>/dev/null || true
     [[ -e /etc/resolv.conf ]] && rm -f /etc/resolv.conf
@@ -350,10 +369,15 @@ DNS=1.1.1.1"
     if [[ ! -f "$network_file" ]] || [[ "$(cat "$network_file")" != "$network_content" ]]; then
         echo "$network_content" > "$network_file"
         systemctl enable systemd-networkd
+        # DHCP-Lease auf dem Interface entfernen, damit networkd statisch greifen kann
+        ip addr flush dev "$IFACE" 2>/dev/null || true
         systemctl restart systemd-networkd
         log "systemd-networkd neu gestartet"
     else
-        log "Netzwerk-Config unveraendert"
+        # Selbst bei unveraenderter Config: networking.service-Disable braucht Restart
+        ip addr flush dev "$IFACE" 2>/dev/null || true
+        systemctl restart systemd-networkd
+        log "Netzwerk-Config unveraendert, networkd dennoch neu gestartet"
     fi
 }
 
