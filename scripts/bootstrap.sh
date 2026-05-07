@@ -325,7 +325,8 @@ apply_network() {
         systemctl disable dhcpcd
     fi
 
-    # Statische resolv.conf
+    # Statische resolv.conf — immutable-Flag von alten Laeufen entfernen
+    chattr -i /etc/resolv.conf 2>/dev/null || true
     [[ -e /etc/resolv.conf ]] && rm -f /etc/resolv.conf
     cat > /etc/resolv.conf <<EOF
 nameserver $GATEWAY
