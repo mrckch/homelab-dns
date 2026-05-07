@@ -712,6 +712,12 @@ run_phase2() {
     log "Phase 2: Setup für $HOSTNAME (Rolle: $ROLE)"
     log "════════════════════════════════════════════"
 
+    # Defensive: Netzwerk-Konfig erneut anwenden — falls Phase 1 ueber alten
+    # Bootstrap (ohne networking.service-Disable) lief, ist die VM evtl. noch
+    # auf der DHCP-IP. apply_network ist idempotent und korrigiert das.
+    ensure_tools
+    apply_network
+
     wait_for_dns
     step_install_packages
     step_set_hostname
