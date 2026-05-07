@@ -4,368 +4,184 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="refresh" content="60">
-    <title>Pi-hole Recovery</title>
-    <style>
-        :root {
-            --bg: #1a1a2e;
-            --surface: #16213e;
-            --border: #0f3460;
-            --text: #e0e0e0;
-            --text-muted: #a0a0a0;
-            --accent: #e94560;
-            --accent-hover: #ff6b81;
-            --code-bg: #0d1117;
-            --green: #4caf50;
-            --orange: #ff9800;
-            --red: #f44336;
-        }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
-            background: var(--bg);
-            color: var(--text);
-            line-height: 1.6;
-            padding: 2rem;
-            max-width: 960px;
-            margin: 0 auto;
-        }
-        h1 { color: var(--accent); margin-bottom: 0.25rem; font-size: 1.8rem; }
-        .subtitle { color: var(--text-muted); margin-bottom: 0.25rem; }
-        .refresh-hint { color: var(--text-muted); font-size: 0.78rem; margin-bottom: 1.5rem; }
-        h2 {
-            color: var(--accent);
-            margin: 2rem 0 1rem;
-            padding-bottom: 0.3rem;
-            border-bottom: 1px solid var(--border);
-            font-size: 1.2rem;
-        }
-        .card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 1.25rem;
-            margin: 0.75rem 0;
-        }
-        .row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0.4rem 0;
-            border-bottom: 1px solid var(--border);
-        }
-        .row:last-child { border-bottom: none; }
-        .label { color: var(--text-muted); font-size: 0.9rem; }
-        .value { font-weight: bold; text-align: right; }
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 0.75rem;
-            margin: 0.75rem 0;
-        }
-        .metric {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 1rem;
-            text-align: center;
-        }
-        .metric-label { color: var(--text-muted); font-size: 0.8rem; margin-bottom: 0.25rem; }
-        .metric-value { font-size: 1.6rem; font-weight: bold; }
-        .metric-sub { color: var(--text-muted); font-size: 0.75rem; margin-top: 0.1rem; }
-        .bar-bg {
-            background: var(--border);
-            border-radius: 4px;
-            height: 6px;
-            margin-top: 0.5rem;
-            overflow: hidden;
-        }
-        .bar-fill {
-            height: 100%;
-            border-radius: 4px;
-            transition: width 0.3s;
-        }
-        .ok    { color: var(--green); }
-        .warn  { color: var(--orange); }
-        .error { color: var(--red); }
-        .badge {
-            display: inline-block;
-            padding: 0.15rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.8rem;
-            font-weight: bold;
-        }
-        .badge-ok    { background: #1b3a1b; color: var(--green); }
-        .badge-warn  { background: #3a2a00; color: var(--orange); }
-        .badge-error { background: #3a1010; color: var(--red); }
-        .badge-info  { background: #0f3460; color: #90caf9; }
-        a { color: var(--accent); text-decoration: none; }
-        a:hover { color: var(--accent-hover); text-decoration: underline; }
-        .cmd-block {
-            position: relative;
-            background: var(--code-bg);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            padding: 0.85rem 3.5rem 0.85rem 1rem;
-            margin: 0.4rem 0;
-            font-family: "Fira Code", "Cascadia Code", monospace;
-            font-size: 0.85rem;
-            overflow-x: auto;
-        }
-        .cmd-block code { color: var(--text); white-space: pre; }
-        .copy-btn {
-            position: absolute;
-            top: 0.4rem;
-            right: 0.4rem;
-            background: var(--border);
-            color: var(--text);
-            border: none;
-            border-radius: 4px;
-            padding: 0.25rem 0.5rem;
-            cursor: pointer;
-            font-size: 0.72rem;
-        }
-        .copy-btn:hover { background: var(--accent); }
-        .copy-btn.copied { background: var(--green); }
-        .warning {
-            background: #2d1b00;
-            border: 1px solid #e65100;
-            border-radius: 6px;
-            padding: 1rem;
-            margin: 1rem 0;
-        }
-        ul { padding-left: 1.5rem; }
-        li { margin: 0.3rem 0; }
-        #loading { color: var(--text-muted); font-style: italic; }
-    </style>
+    <title>DNS Homelab — Status Dashboard</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<h1>Pi-hole Recovery Console</h1>
-<p class="subtitle">Homelab DNS — Notfall- und Wartungsseite</p>
-<p class="refresh-hint">Seite aktualisiert automatisch alle 60 Sekunden &nbsp;·&nbsp; Systemdaten werden alle 5 Minuten erneuert</p>
-
-<!-- Status dieser VM -->
-<h2>Status dieser VM</h2>
-<div class="card">
-    <div class="row"><span class="label">Hostname</span><span class="value" id="v-hostname">…</span></div>
-    <div class="row"><span class="label">IP-Adresse</span><span class="value" id="v-ip">…</span></div>
-    <div class="row"><span class="label">Rolle</span><span class="value" id="v-role">…</span></div>
-    <div class="row"><span class="label">Pi-hole Admin</span><span class="value"><a id="admin-link" href="/admin">Admin-UI öffnen →</a></span></div>
-    <div class="row"><span class="label">Daten Stand</span><span class="value" id="v-generated">…</span></div>
-</div>
-
-<!-- System-Gesundheit -->
-<h2>System-Gesundheit</h2>
-<div class="grid">
-    <div class="metric">
-        <div class="metric-label">Uptime</div>
-        <div class="metric-value" id="m-uptime" style="font-size:1.1rem">…</div>
+<header class="topbar">
+    <div class="brand">
+        <span class="brand-mark">●</span>
+        <span class="brand-text">DNS Homelab</span>
+        <span class="brand-host" id="brand-host">…</span>
     </div>
-    <div class="metric">
-        <div class="metric-label">CPU Load (1m / 5m / 15m)</div>
-        <div class="metric-value" id="m-load" style="font-size:1.1rem">…</div>
-    </div>
-    <div class="metric">
-        <div class="metric-label">RAM-Auslastung</div>
-        <div class="metric-value" id="m-mem-pct">…</div>
-        <div class="metric-sub" id="m-mem-sub">…</div>
-        <div class="bar-bg"><div class="bar-fill" id="m-mem-bar" style="width:0%"></div></div>
-    </div>
-    <div class="metric">
-        <div class="metric-label">Disk / (root)</div>
-        <div class="metric-value" id="m-disk-pct">…</div>
-        <div class="metric-sub" id="m-disk-sub">…</div>
-        <div class="bar-bg"><div class="bar-fill" id="m-disk-bar" style="width:0%"></div></div>
-    </div>
-</div>
+    <nav>
+        <a href="/" class="active">Status</a>
+        <a href="/ops.html">Operations</a>
+    </nav>
+</header>
 
-<!-- Container-Status -->
-<h2>Container-Status</h2>
-<div class="card">
-    <div class="row">
-        <span class="label">pihole</span>
-        <span class="value"><span id="c-pihole">…</span></span>
-    </div>
-    <div class="row">
-        <span class="label">recovery-site</span>
-        <span class="value"><span id="c-recovery">…</span></span>
-    </div>
-    <div class="row">
-        <span class="label">DNS-Auflösung (@127.0.0.1)</span>
-        <span class="value" id="c-dns">…</span>
-    </div>
-    <div class="row">
-        <span class="label">Letzter Sync</span>
-        <span class="value" id="c-sync">…</span>
-    </div>
-</div>
+<main>
+    <p class="hint">Auto-Refresh: Seite alle 60s, Daten alle 5min via Cron.
+       Letzte Aktualisierung: <span id="generated-at">…</span></p>
 
-<!-- Häufige Befehle -->
-<h2>Häufige Befehle</h2>
+    <!-- ───── VM Overview ───── -->
+    <section>
+        <h2>VM &amp; System</h2>
+        <div class="grid grid-4">
+            <div class="card">
+                <div class="card-label">Hostname</div>
+                <div class="card-value" id="v-hostname">…</div>
+                <div class="card-sub" id="v-role">…</div>
+            </div>
+            <div class="card">
+                <div class="card-label">IP-Adresse</div>
+                <div class="card-value" id="v-ip">…</div>
+                <div class="card-sub"><a id="admin-link" href="/admin">Admin-UI →</a></div>
+            </div>
+            <div class="card">
+                <div class="card-label">OS</div>
+                <div class="card-value-sm" id="v-os">…</div>
+                <div class="card-sub" id="v-kernel">…</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Uptime</div>
+                <div class="card-value-sm" id="v-uptime">…</div>
+                <div class="card-sub"><span id="v-cores">…</span> Kerne · Load: <span id="v-load">…</span></div>
+            </div>
+        </div>
+    </section>
 
-<p style="margin-bottom:0.3rem"><strong>Container-Status prüfen</strong></p>
-<div class="cmd-block"><code>cd /opt/homelab-dns/compose && docker compose ps</code><button class="copy-btn" onclick="copyCmd(this)">Copy</button></div>
+    <!-- ───── Resources ───── -->
+    <section>
+        <h2>Ressourcen</h2>
+        <div class="grid grid-2">
+            <div class="card">
+                <div class="card-label">RAM-Auslastung</div>
+                <div class="card-value" id="m-mem-pct">…</div>
+                <div class="card-sub" id="m-mem-sub">…</div>
+                <div class="bar"><div class="bar-fill" id="m-mem-bar"></div></div>
+            </div>
+            <div class="card">
+                <div class="card-label">Disk / (root)</div>
+                <div class="card-value" id="m-disk-pct">…</div>
+                <div class="card-sub" id="m-disk-sub">…</div>
+                <div class="bar"><div class="bar-fill" id="m-disk-bar"></div></div>
+            </div>
+        </div>
+    </section>
 
-<p style="margin-bottom:0.3rem"><strong>Pi-hole neu starten</strong></p>
-<div class="cmd-block"><code>cd /opt/homelab-dns/compose && docker compose down && docker compose up -d</code><button class="copy-btn" onclick="copyCmd(this)">Copy</button></div>
+    <!-- ───── Containers ───── -->
+    <section>
+        <h2>Container</h2>
+        <div class="card no-pad">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Status</th>
+                        <th>Image</th>
+                        <th>Restarts</th>
+                        <th>Gestartet</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr id="row-pihole">
+                        <td>pihole</td>
+                        <td><span id="c-pihole-status">…</span></td>
+                        <td class="mono" id="c-pihole-image">…</td>
+                        <td id="c-pihole-restarts">…</td>
+                        <td id="c-pihole-started">…</td>
+                    </tr>
+                    <tr id="row-recovery">
+                        <td>recovery-site</td>
+                        <td><span id="c-recovery-status">…</span></td>
+                        <td class="mono" id="c-recovery-image">…</td>
+                        <td id="c-recovery-restarts">…</td>
+                        <td>–</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
 
-<p style="margin-bottom:0.3rem"><strong>Container-Logs ansehen</strong></p>
-<div class="cmd-block"><code>cd /opt/homelab-dns/compose && docker compose logs -f --tail=100 pihole</code><button class="copy-btn" onclick="copyCmd(this)">Copy</button></div>
+    <!-- ───── DNS Health ───── -->
+    <section>
+        <h2>DNS Gesundheit</h2>
+        <div class="grid grid-3">
+            <div class="card">
+                <div class="card-label">Lokale Aufloesung</div>
+                <div class="card-value-sm" id="dns-local">…</div>
+                <div class="card-sub" id="dns-local-sub">@127.0.0.1</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Cloudflare (1.1.1.1)</div>
+                <div class="card-value-sm" id="dns-cf">…</div>
+                <div class="card-sub">Upstream</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Quad9 (9.9.9.9)</div>
+                <div class="card-value-sm" id="dns-q9">…</div>
+                <div class="card-sub">Upstream</div>
+            </div>
+        </div>
+    </section>
 
-<p style="margin-bottom:0.3rem"><strong>DNS-Test</strong></p>
-<div class="cmd-block"><code>dig @127.0.0.1 example.com</code><button class="copy-btn" onclick="copyCmd(this)">Copy</button></div>
+    <!-- ───── Pi-hole Stats ───── -->
+    <section>
+        <h2>Pi-hole Statistik</h2>
+        <div class="grid grid-4">
+            <div class="card">
+                <div class="card-label">Anfragen heute</div>
+                <div class="card-value" id="p-queries">…</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Geblockt</div>
+                <div class="card-value" id="p-blocked">…</div>
+                <div class="card-sub" id="p-blocked-pct">…</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Domains auf Listen</div>
+                <div class="card-value" id="p-domains">…</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Gravity letzter Update</div>
+                <div class="card-value-sm" id="p-gravity">…</div>
+            </div>
+        </div>
+    </section>
 
-<p style="margin-bottom:0.3rem"><strong>Sync manuell auslösen</strong></p>
-<div class="cmd-block"><code id="sync-cmd">/opt/homelab-dns/scripts/teleporter-export.sh</code><button class="copy-btn" onclick="copyCmd(this)">Copy</button></div>
+    <!-- ───── Sync ───── -->
+    <section>
+        <h2>Synchronisation</h2>
+        <div class="card">
+            <div class="row">
+                <span class="label">Letzter Sync</span>
+                <span class="value" id="s-last">…</span>
+            </div>
+            <div class="row">
+                <span class="label">Git Branch</span>
+                <span class="value mono" id="s-branch">…</span>
+            </div>
+            <div class="row">
+                <span class="label">Git HEAD</span>
+                <span class="value mono" id="s-head">…</span>
+            </div>
+        </div>
+    </section>
 
-<p style="margin-bottom:0.3rem"><strong>Sync-Log prüfen</strong></p>
-<div class="cmd-block"><code id="log-cmd">tail -30 /var/log/pihole-sync/export.log</code><button class="copy-btn" onclick="copyCmd(this)">Copy</button></div>
+    <!-- ───── Recent Log ───── -->
+    <section>
+        <h2>Letzte Log-Eintraege</h2>
+        <pre class="log" id="recent-log">…</pre>
+    </section>
 
-<p style="margin-bottom:0.3rem"><strong>Image updaten (nach Runbook!)</strong></p>
-<div class="cmd-block"><code>cd /opt/homelab-dns/compose && docker compose pull && docker compose up -d</code><button class="copy-btn" onclick="copyCmd(this)">Copy</button></div>
+</main>
 
-<!-- Recovery -->
-<h2>Recovery-Anleitung</h2>
-<ul>
-    <li><strong>Container kaputt:</strong> <code>docker compose down && docker compose up -d</code></li>
-    <li><strong>VM kaputt:</strong> Aus NAS-Snapshot wiederherstellen oder <code>bootstrap.sh</code> neu ausführen</li>
-    <li><strong>Host tot:</strong> Neue VM, Secrets aus Passwort-Manager, <code>bootstrap.sh</code></li>
-</ul>
-<p style="margin-top:0.75rem">
-    Vollständige Anleitung: <a href="https://github.com/mrckch/homelab-dns/blob/main/docs/recovery.md" target="_blank">Recovery-Dokumentation auf GitHub →</a>
-</p>
+<footer>
+    <span>DNS Homelab · <a href="https://github.com/mrckch/homelab-dns" target="_blank">GitHub</a></span>
+</footer>
 
-<!-- Secrets -->
-<h2>Wo finde ich die Secrets?</h2>
-<div class="warning">
-    <strong>Secrets werden NIEMALS auf dieser Seite angezeigt.</strong>
-    <ul style="margin-top:0.5rem">
-        <li><strong>Pi-hole Passwort:</strong> Passwort-Manager → "Homelab / Pi-hole"</li>
-        <li><strong>GitHub PAT</strong> (nur Master): Passwort-Manager → "Homelab / GitHub PAT"</li>
-        <li><strong>SSH Deploy-Key</strong> (nur Follower): Passwort-Manager → "Homelab / Deploy Key"</li>
-    </ul>
-</div>
-
-<script>
-(function() {
-    var REPO_DIR = '/opt/homelab-dns';
-
-    function kb(v) {
-        if (v > 1024*1024) return (v/1024/1024).toFixed(1) + ' GB';
-        return (v/1024).toFixed(0) + ' MB';
-    }
-
-    function barColor(pct) {
-        if (pct < 70) return '#4caf50';
-        if (pct < 85) return '#ff9800';
-        return '#f44336';
-    }
-
-    function badge(text, type) {
-        return '<span class="badge badge-' + type + '">' + text + '</span>';
-    }
-
-    function containerBadge(status, health) {
-        if (status === 'running' && (health === 'healthy' || health === 'none')) return badge('running ✓', 'ok');
-        if (status === 'running' && health === 'starting') return badge('starting…', 'warn');
-        if (status === 'running' && health === 'unhealthy') return badge('unhealthy', 'error');
-        if (status === 'not found') return badge('nicht gefunden', 'error');
-        return badge(status, 'warn');
-    }
-
-    var host = window.location.hostname;
-    document.getElementById('admin-link').href = 'http://' + host + '/admin';
-
-    fetch('/system-status.json?_=' + Date.now())
-        .then(function(r) { return r.json(); })
-        .then(function(d) {
-            // VM-Info
-            document.getElementById('v-hostname').textContent = d.hostname || host;
-            document.getElementById('v-ip').textContent = d.ip || host;
-            document.getElementById('v-generated').textContent = d.generated_at || '–';
-            document.getElementById('admin-link').href = 'http://' + (d.ip || host) + '/admin';
-
-            var roleEl = document.getElementById('v-role');
-            if (d.role === 'a') {
-                roleEl.innerHTML = badge('Master (Schreib-Instanz)', 'error');
-                document.getElementById('sync-cmd').textContent = REPO_DIR + '/scripts/teleporter-export.sh';
-                document.getElementById('log-cmd').textContent = 'tail -30 /var/log/pihole-sync/export.log';
-            } else if (d.role === 'b') {
-                roleEl.innerHTML = badge('Follower (Read-Only)', 'ok');
-                document.getElementById('sync-cmd').textContent = REPO_DIR + '/scripts/teleporter-import.sh';
-                document.getElementById('log-cmd').textContent = 'tail -30 /var/log/pihole-sync/import.log';
-            } else {
-                roleEl.textContent = '–';
-            }
-
-            // Uptime & Load
-            document.getElementById('m-uptime').textContent = d.uptime || '–';
-            document.getElementById('m-load').textContent = d.load || '–';
-
-            // Memory
-            var memPct = d.memory ? d.memory.percent : 0;
-            document.getElementById('m-mem-pct').textContent = memPct + '%';
-            document.getElementById('m-mem-pct').className = 'metric-value ' + (memPct < 70 ? 'ok' : memPct < 85 ? 'warn' : 'error');
-            if (d.memory) {
-                document.getElementById('m-mem-sub').textContent = kb(d.memory.used_kb) + ' / ' + kb(d.memory.total_kb);
-            }
-            var memBar = document.getElementById('m-mem-bar');
-            memBar.style.width = memPct + '%';
-            memBar.style.background = barColor(memPct);
-
-            // Disk
-            var diskPct = d.disk ? d.disk.percent : 0;
-            document.getElementById('m-disk-pct').textContent = diskPct + '%';
-            document.getElementById('m-disk-pct').className = 'metric-value ' + (diskPct < 70 ? 'ok' : diskPct < 85 ? 'warn' : 'error');
-            if (d.disk) {
-                document.getElementById('m-disk-sub').textContent = kb(d.disk.used_kb) + ' / ' + kb(d.disk.total_kb);
-            }
-            var diskBar = document.getElementById('m-disk-bar');
-            diskBar.style.width = diskPct + '%';
-            diskBar.style.background = barColor(diskPct);
-
-            // Container
-            if (d.containers) {
-                var ph = d.containers.pihole || {};
-                document.getElementById('c-pihole').innerHTML = containerBadge(ph.status, ph.health);
-                var rc = d.containers.recovery_site || {};
-                document.getElementById('c-recovery').innerHTML = containerBadge(rc.status, 'none');
-            }
-
-            // DNS
-            var dnsEl = document.getElementById('c-dns');
-            dnsEl.innerHTML = d.dns_ok ? badge('OK ✓', 'ok') : badge('FEHLER ✗', 'error');
-
-            // Sync
-            document.getElementById('c-sync').textContent = d.last_sync || '–';
-        })
-        .catch(function() {
-            document.getElementById('v-hostname').textContent = host;
-            document.getElementById('v-role').innerHTML = '<span class="warn">system-status.json nicht gefunden — bootstrap.sh ausführen</span>';
-        });
-})();
-
-function copyCmd(btn) {
-    var code = btn.parentElement.querySelector('code');
-    var text = code.textContent;
-    if (navigator.clipboard) {
-        navigator.clipboard.writeText(text).then(function() {
-            btn.textContent = 'Copied!';
-            btn.classList.add('copied');
-            setTimeout(function() { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
-        });
-    } else {
-        var r = document.createRange();
-        r.selectNodeContents(code);
-        var s = window.getSelection();
-        s.removeAllRanges(); s.addRange(r);
-        document.execCommand('copy');
-        s.removeAllRanges();
-        btn.textContent = 'Copied!';
-        btn.classList.add('copied');
-        setTimeout(function() { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
-    }
-}
-</script>
+<script src="status.js"></script>
 </body>
 </html>

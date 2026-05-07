@@ -2,7 +2,7 @@ services:
   pihole:
     image: pihole/pihole:2025.03.0
     container_name: pihole
-    hostname: ${PIHOLE_HOSTNAME:-pihole}
+    hostname: ${DNS_HOSTNAME:-dns}
     restart: unless-stopped
     ports:
       - "53:53/tcp"

@@ -1,50 +1,49 @@
 #!/usr/bin/env bash
+# Installs role-specific cron jobs based on hostname (dns1 or dns2).
+
 set -euo pipefail
 
-# Install role-specific cron job for Teleporter sync.
-# Idempotent: overwrites existing cron file on each run.
-
 REPO_DIR="/opt/homelab-dns"
-CRON_FILE="/etc/cron.d/pihole-sync"
+CRON_FILE="/etc/cron.d/dns-sync"
+LOG_DIR="/var/log/dns-sync"
 
-log() { echo "[setup-cron] $(date '+%Y-%m-%d %H:%M:%S') $*"; }
+log() { echo "[setup-cron] $(date '+%F %T') $*"; }
+
+mkdir -p "$LOG_DIR"
 
 CURRENT_HOSTNAME="$(hostname)"
 
 case "$CURRENT_HOSTNAME" in
-    pihole-a)
-        log "Configuring export cron for pihole-a (master)..."
+    dns1)
+        log "Installiere Cron für dns1 (master)..."
         cat > "$CRON_FILE" <<EOF
-# Nightly Teleporter export at 03:00
-0 3 * * * root ${REPO_DIR}/scripts/teleporter-export.sh >> /var/log/pihole-sync/export.log 2>&1
-# System status fuer Recovery-Site alle 5 Minuten aktualisieren
-*/5 * * * * root ${REPO_DIR}/scripts/update-site-info.sh >> /var/log/pihole-sync/site-info.log 2>&1
+# Naechtlicher Teleporter-Export um 03:00
+0 3 * * * root ${REPO_DIR}/scripts/teleporter-export.sh >> ${LOG_DIR}/export.log 2>&1
+# System-Status alle 5 Minuten aktualisieren
+*/5 * * * * root ${REPO_DIR}/scripts/update-site-info.sh >> ${LOG_DIR}/site-info.log 2>&1
 EOF
         ;;
-    pihole-b)
-        log "Configuring import cron for pihole-b (follower)..."
+    dns2)
+        log "Installiere Cron für dns2 (follower)..."
         cat > "$CRON_FILE" <<EOF
-# Nightly Teleporter import at 03:30
-30 3 * * * root ${REPO_DIR}/scripts/teleporter-import.sh >> /var/log/pihole-sync/import.log 2>&1
-# System status fuer Recovery-Site alle 5 Minuten aktualisieren
-*/5 * * * * root ${REPO_DIR}/scripts/update-site-info.sh >> /var/log/pihole-sync/site-info.log 2>&1
+# Naechtlicher Teleporter-Import um 03:30
+30 3 * * * root ${REPO_DIR}/scripts/teleporter-import.sh >> ${LOG_DIR}/import.log 2>&1
+# System-Status alle 5 Minuten aktualisieren
+*/5 * * * * root ${REPO_DIR}/scripts/update-site-info.sh >> ${LOG_DIR}/site-info.log 2>&1
 EOF
         ;;
     *)
-        echo "ERROR: Unknown hostname '${CURRENT_HOSTNAME}'. Expected 'pihole-a' or 'pihole-b'."
+        echo "FEHLER: Unbekannter Hostname '$CURRENT_HOSTNAME' (erwartet: dns1 oder dns2)"
         exit 1
         ;;
 esac
 
 chmod 0644 "$CRON_FILE"
-
-log "Cron job installed at ${CRON_FILE}:"
+log "Cron installiert: $CRON_FILE"
 cat "$CRON_FILE"
 
 if ! systemctl is-active --quiet cron; then
-    log "Starting cron service..."
-    systemctl enable cron
-    systemctl start cron
+    systemctl enable --now cron
 fi
 
-log "Cron setup complete."
+log "Cron-Setup fertig"

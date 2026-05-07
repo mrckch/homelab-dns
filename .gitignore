@@ -13,6 +13,7 @@ compose/etc-dnsmasq.d/
 
 # Generated site info (created locally by update-site-info.sh)
 recovery-site/system-status.json
+recovery-site/metrics-history.json
 
 # Editor and IDE files
 *.swp

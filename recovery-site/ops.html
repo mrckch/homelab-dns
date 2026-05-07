@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DNS Homelab — Operations</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+    <div class="brand">
+        <span class="brand-mark">●</span>
+        <span class="brand-text">DNS Homelab</span>
+        <span class="brand-host" id="brand-host">…</span>
+    </div>
+    <nav>
+        <a href="/">Status</a>
+        <a href="/ops.html" class="active">Operations</a>
+    </nav>
+</header>
+
+<main>
+    <p class="hint">Alle Befehle sind kopierfertig. Per Klick auf <strong>Copy</strong> in die Zwischenablage und in der SSH-Sitzung einfügen.</p>
+
+    <!-- ───── Quick Actions ───── -->
+    <section>
+        <h2>Quick Actions</h2>
+        <div class="action-grid">
+            <div class="action-card">
+                <h3>Pi-hole neu starten</h3>
+                <p>Container stoppen und wieder hochfahren. ~10 Sek.</p>
+                <div class="cmd-block"><code>cd /opt/homelab-dns/compose &amp;&amp; docker compose restart pihole</code><button class="copy-btn" onclick="copyCmd(this)">Copy</button></div>
+            </div>
+            <div class="action-card">
+                <h3>Alle Container neu starten</h3>
+                <p>Pi-hole + Recovery-Site neustarten.</p>
+                <div class="cmd-block"><code>cd /opt/homelab-dns/compose &amp;&amp; docker compose restart</code><button class="copy-btn" onclick="copyCmd(this)">Copy</button></div>
+            </div>
+            <div class="action-card">
+                <h3>Container neu erzeugen</h3>
+                <p>Bei Konfigurationsaenderungen. Daten bleiben erhalten.</p>
+                <div class="cmd-block"><code>cd /opt/homelab-dns/compose &amp;&amp; docker compose up -d --force-recreate</code><button class="copy-btn" onclick="copyCmd(this)">Copy</button></div>
+            </div>
+            <div class="action-card">
+                <h3>Image-Update prüfen</h3>
+                <p>Neue Pi-hole-Version laden. Versetzt fahren!</p>
+                <div class="cmd-block"><code>cd /opt/homelab-dns/compose &amp;&amp; docker compose pull &amp;&amp; docker compose up -d</code><button class="copy-btn" onclick="copyCmd(this)">Copy</button></div>
+            </div>
+            <div class="action-card">
+                <h3>Gravity aktualisieren</h3>
+                <p>Adlists neu einlesen, Blocking-Datenbank bauen.</p>
+                <div class="cmd-block"><code>docker exec pihole pihole -g</code><button class="copy-btn" onclick="copyCmd(this)">Copy</button></div>
+            </div>
+            <div class="action-card">
+                <h3>Sync jetzt ausführen</h3>
+                <p id="sync-desc">Aktion ist rollenabhängig (siehe Befehl).</p>
+                <div class="cmd-block"><code id="sync-cmd">/opt/homelab-dns/scripts/teleporter-export.sh</code><button class="copy-btn" onclick="copyCmd(this)">Copy</button></div>
+            </div>
+            <div class="action-card">
+                <h3>System-Status aktualisieren</h3>
+                <p>Erzwingt sofortige Neuberechnung der Dashboard-Werte.</p>
+                <div class="cmd-block"><code>/opt/homelab-dns/scripts/update-site-info.sh</code><button class="copy-btn" onclick="copyCmd(this)">Copy</button></div>
+            </div>
+            <div class="action-card">
+                <h3>Repo aktualisieren</h3>
+                <p>Neueste Skripte und Konfig holen.</p>
+                <div class="cmd-block"><code>cd /opt/homelab-dns &amp;&amp; git pull</code><button class="copy-btn" onclick="copyCmd(this)">Copy</button></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ───── Logs ───── -->
+    <section>
+        <h2>Logs</h2>
+        <div class="action-grid">
+            <div class="action-card">
+                <h3>Pi-hole Container-Logs</h3>
+                <div class="cmd-block"><code>cd /opt/homelab-dns/compose &amp;&amp; docker compose logs -f --tail=100 pihole</code><button class="copy-btn" onclick="copyCmd(this)">Copy</button></div>
+            </div>
+            <div class="action-card">
+                <h3>Sync-Log (live)</h3>
+                <div class="cmd-block"><code id="log-cmd">tail -f /var/log/dns-sync/export.log</code><button class="copy-btn" onclick="copyCmd(this)">Copy</button></div>
+            </div>
+            <div class="action-card">
+                <h3>Bootstrap-Log</h3>
+                <div class="cmd-block"><code>tail -f /var/log/dns-bootstrap.log</code><button class="copy-btn" onclick="copyCmd(this)">Copy</button></div>
+            </div>
+            <div class="action-card">
+                <h3>System-Updates-Log</h3>
+                <div class="cmd-block"><code>tail -50 /var/log/unattended-upgrades/unattended-upgrades.log</code><button class="copy-btn" onclick="copyCmd(this)">Copy</button></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ───── DNS-Tests ───── -->
+    <section>
+        <h2>DNS-Tests</h2>
+        <div class="action-grid">
+            <div class="action-card">
+                <h3>Lokale Auflösung</h3>
+                <div class="cmd-block"><code>dig @127.0.0.1 example.com</code><button class="copy-btn" onclick="copyCmd(this)">Copy</button></div>
+            </div>
+            <div class="action-card">
+                <h3>Blocking-Test</h3>
+                <p>Sollte 0.0.0.0 oder NXDOMAIN zurückgeben.</p>
+                <div class="cmd-block"><code>dig @127.0.0.1 ads.google.com</code><button class="copy-btn" onclick="copyCmd(this)">Copy</button></div>
+            </div>
+            <div class="action-card">
+                <h3>Upstream-Check Cloudflare</h3>
+                <div class="cmd-block"><code>dig @1.1.1.1 example.com</code><button class="copy-btn" onclick="copyCmd(this)">Copy</button></div>
+            </div>
+            <div class="action-card">
+                <h3>Upstream-Check Quad9</h3>
+                <div class="cmd-block"><code>dig @9.9.9.9 example.com</code><button class="copy-btn" onclick="copyCmd(this)">Copy</button></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ───── Recovery ───── -->
+    <section>
+        <h2>Recovery-Szenarien</h2>
+
+        <div class="action-card">
+            <h3>1. Container kaputt — VM läuft</h3>
+            <ul class="compact">
+                <li>Logs prüfen: <code>docker compose logs --tail=50 pihole</code></li>
+                <li>Container neustarten: <code>docker compose down &amp;&amp; docker compose up -d</code></li>
+                <li>DNS testen: <code>dig @127.0.0.1 example.com</code></li>
+            </ul>
+        </div>
+
+        <div class="action-card">
+            <h3>2. VM kaputt — Host läuft</h3>
+            <ul class="compact">
+                <li>Aus NAS-Snapshot wiederherstellen, ODER:</li>
+                <li>Neue VM aufsetzen, Secrets aus Passwort-Manager hinterlegen</li>
+                <li>Bootstrap holen: <code>curl -fsSL https://raw.githubusercontent.com/mrckch/homelab-dns/main/scripts/bootstrap.sh -o /tmp/bootstrap.sh</code></li>
+                <li><code>chmod +x /tmp/bootstrap.sh &amp;&amp; sudo /tmp/bootstrap.sh</code></li>
+            </ul>
+        </div>
+
+        <div class="action-card">
+            <h3>3. Host komplett tot</h3>
+            <ul class="compact">
+                <li>Andere Pi-hole-Instanz übernimmt automatisch DNS (UDM verteilt beide IPs)</li>
+                <li>Neuer Host + neue VM aufsetzen</li>
+                <li>Bootstrap mit Original-IP — Sync läuft in der nächsten Nacht</li>
+            </ul>
+        </div>
+    </section>
+
+    <!-- ───── Secrets ───── -->
+    <section>
+        <h2>Secrets</h2>
+        <div class="warning">
+            <strong>Secrets niemals auf dieser Seite anzeigen!</strong>
+            <ul class="compact" style="margin-top:0.5rem">
+                <li><strong>Pi-hole Passwort:</strong> Passwort-Manager → "Homelab / Pi-hole"</li>
+                <li><strong>GitHub PAT</strong> (nur Master, <code>/etc/dns-sync/github.token</code>): Passwort-Manager → "Homelab / GitHub PAT"</li>
+                <li><strong>SSH Deploy-Key</strong> (nur Follower, <code>/root/.ssh/id_ed25519_homelab-dns</code>): Passwort-Manager → "Homelab / Deploy Key"</li>
+            </ul>
+        </div>
+    </section>
+
+</main>
+
+<footer>
+    <span>DNS Homelab · <a href="https://github.com/mrckch/homelab-dns" target="_blank">GitHub</a> · <a href="https://github.com/mrckch/homelab-dns/blob/main/docs/recovery.md" target="_blank">Recovery-Doku</a></span>
+</footer>
+
+<script>
+fetch('/system-status.json?_=' + Date.now())
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+        document.getElementById('brand-host').textContent = d.hostname || '–';
+        var role = d.role;
+        if (role === 'master') {
+            document.getElementById('sync-cmd').textContent = '/opt/homelab-dns/scripts/teleporter-export.sh';
+            document.getElementById('log-cmd').textContent  = 'tail -f /var/log/dns-sync/export.log';
+            document.getElementById('sync-desc').textContent = 'Master: Export erzwingen, Push auf GitHub.';
+        } else if (role === 'follower') {
+            document.getElementById('sync-cmd').textContent = '/opt/homelab-dns/scripts/teleporter-import.sh';
+            document.getElementById('log-cmd').textContent  = 'tail -f /var/log/dns-sync/import.log';
+            document.getElementById('sync-desc').textContent = 'Follower: Pull von GitHub, Import in Pi-hole.';
+        }
+    })
+    .catch(function () {});
+
+function copyCmd(btn) {
+    var code = btn.parentElement.querySelector('code');
+    var text = code.textContent;
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(function () {
+            btn.textContent = 'Kopiert!';
+            btn.classList.add('copied');
+            setTimeout(function () { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
+        });
+    } else {
+        var r = document.createRange();
+        r.selectNodeContents(code);
+        var s = window.getSelection();
+        s.removeAllRanges();
+        s.addRange(r);
+        document.execCommand('copy');
+        s.removeAllRanges();
+        btn.textContent = 'Kopiert!';
+        btn.classList.add('copied');
+        setTimeout(function () { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
+    }
+}
+</script>
+</body>
+</html>

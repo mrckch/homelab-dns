@@ -1,112 +1,67 @@
 #!/usr/bin/env bash
-set -euo pipefail
+# Teleporter export (master): pulls Pi-hole config via API, commits to git.
+# Runs only on dns1 (master). Triggered nightly via cron at 03:00.
 
-# Export Pi-hole configuration via Teleporter API (v6) and push to Git.
-# Runs only on pihole-a (master). Called nightly via cron at 03:00.
+set -euo pipefail
 
 REPO_DIR="/opt/homelab-dns"
 BACKUP_DIR="${REPO_DIR}/backups"
 BACKUP_FILE="${BACKUP_DIR}/teleporter-latest.zip"
-LOG_DIR="/var/log/pihole-sync"
+LOG_DIR="/var/log/dns-sync"
 LOG_FILE="${LOG_DIR}/export.log"
-GITHUB_TOKEN_FILE="/etc/pihole-sync/github.token"
+GITHUB_TOKEN_FILE="/etc/dns-sync/github.token"
 PIHOLE_URL="http://localhost:80"
 
 mkdir -p "$LOG_DIR" "$BACKUP_DIR"
 
-log() {
-    local msg="[export] $(date '+%Y-%m-%d %H:%M:%S') $*"
-    echo "$msg" | tee -a "$LOG_FILE"
-}
+log()    { echo "[export] $(date '+%F %T') $*" | tee -a "$LOG_FILE"; }
+die()    { log "ERROR: $*"; exit 1; }
 
-error_exit() {
-    log "ERROR: $*"
-    exit 1
-}
-
-# --- Pre-flight checks ---
-
-CURRENT_HOSTNAME="$(hostname)"
-if [[ "$CURRENT_HOSTNAME" != "pihole-a" ]]; then
-    error_exit "This script must run on pihole-a (current hostname: ${CURRENT_HOSTNAME})"
-fi
-
-if [[ ! -f "$GITHUB_TOKEN_FILE" ]]; then
-    error_exit "GitHub token not found at ${GITHUB_TOKEN_FILE}"
-fi
+# ── Pre-flight ──
+[[ "$(hostname)" == "dns1" ]] || die "Dieses Skript muss auf dns1 laufen (aktuell: $(hostname))"
+[[ -f "$GITHUB_TOKEN_FILE" ]] || die "GitHub-Token fehlt: $GITHUB_TOKEN_FILE"
 
 ENV_FILE="${REPO_DIR}/compose/.env"
-if [[ ! -f "$ENV_FILE" ]]; then
-    error_exit ".env file not found at ${ENV_FILE}"
-fi
+[[ -f "$ENV_FILE" ]] || die ".env fehlt: $ENV_FILE"
 
 PIHOLE_PASSWORD="$(grep '^FTLCONF_webserver_api_password=' "$ENV_FILE" | cut -d'=' -f2-)"
-if [[ -z "$PIHOLE_PASSWORD" ]]; then
-    error_exit "FTLCONF_webserver_api_password not set in ${ENV_FILE}"
-fi
+[[ -n "$PIHOLE_PASSWORD" ]] || die "FTLCONF_webserver_api_password nicht in $ENV_FILE gesetzt"
 
-log "Starting Teleporter export..."
+log "Starte Teleporter-Export..."
 
-# --- Authenticate with Pi-hole v6 API ---
-
-log "Authenticating with Pi-hole API..."
-AUTH_RESPONSE="$(curl -sS --fail-with-body \
-    -X POST \
-    -H "Content-Type: application/json" \
+# ── Auth ──
+log "Authentifiziere bei Pi-hole API..."
+AUTH_RESPONSE=$(curl -sS --fail-with-body \
+    -X POST -H "Content-Type: application/json" \
     -d "{\"password\":\"${PIHOLE_PASSWORD}\"}" \
-    "${PIHOLE_URL}/api/auth" 2>&1)" \
-    || error_exit "API authentication failed: ${AUTH_RESPONSE}"
+    "${PIHOLE_URL}/api/auth" 2>&1) || die "Auth fehlgeschlagen: $AUTH_RESPONSE"
 
-SID="$(echo "$AUTH_RESPONSE" | jq -r '.session.sid // empty')"
-if [[ -z "$SID" ]]; then
-    error_exit "Failed to extract session ID from auth response: ${AUTH_RESPONSE}"
-fi
+SID=$(echo "$AUTH_RESPONSE" | jq -r '.session.sid // empty')
+[[ -n "$SID" ]] || die "Konnte Session-ID nicht extrahieren: $AUTH_RESPONSE"
 
-log "Authenticated successfully."
+# ── Export ──
+log "Lade Teleporter-Backup..."
+HTTP_CODE=$(curl -sS -o "$BACKUP_FILE" -w '%{http_code}' \
+    -H "sid: ${SID}" "${PIHOLE_URL}/api/teleporter") \
+    || die "Export-Request fehlgeschlagen"
 
-# --- Export Teleporter backup ---
+[[ "$HTTP_CODE" == "200" ]] || die "Export HTTP $HTTP_CODE"
+[[ -s "$BACKUP_FILE" ]] || die "Backup-Datei ist leer"
+log "Backup heruntergeladen: $(stat -c%s "$BACKUP_FILE") bytes"
 
-log "Downloading Teleporter backup..."
-HTTP_CODE="$(curl -sS -o "$BACKUP_FILE" -w '%{http_code}' \
-    -H "sid: ${SID}" \
-    "${PIHOLE_URL}/api/teleporter" 2>&1)" \
-    || error_exit "Teleporter export request failed"
+# ── Session schliessen ──
+curl -sS -X DELETE -H "sid: ${SID}" "${PIHOLE_URL}/api/auth" >/dev/null 2>&1 || true
 
-if [[ "$HTTP_CODE" != "200" ]]; then
-    error_exit "Teleporter export returned HTTP ${HTTP_CODE}"
-fi
-
-if [[ ! -s "$BACKUP_FILE" ]]; then
-    error_exit "Teleporter backup file is empty"
-fi
-
-BACKUP_SIZE="$(stat -c%s "$BACKUP_FILE")"
-log "Backup downloaded: ${BACKUP_SIZE} bytes"
-
-# --- Invalidate session ---
-
-curl -sS -X DELETE \
-    -H "sid: ${SID}" \
-    "${PIHOLE_URL}/api/auth" >/dev/null 2>&1 || true
-
-# --- Commit and push to Git ---
-
-log "Committing and pushing to Git..."
+# ── Git commit & push ──
 cd "$REPO_DIR"
-
 git add backups/teleporter-latest.zip
 
 if git diff --cached --quiet; then
-    log "No changes in Teleporter backup, skipping commit."
+    log "Keine Aenderungen — kein Commit"
 else
-    TIMESTAMP="$(date '+%Y-%m-%d %H:%M')"
-    git commit -m "Teleporter export ${TIMESTAMP}" \
-        || error_exit "git commit failed"
-
-    git push origin main \
-        || error_exit "git push failed — check PAT validity and network connectivity"
-
-    log "Pushed to Git successfully."
+    git commit -m "Teleporter export $(date '+%Y-%m-%d %H:%M')" || die "git commit fehlgeschlagen"
+    git push origin main || die "git push fehlgeschlagen"
+    log "Push erfolgreich"
 fi
 
-log "Teleporter export completed successfully."
+log "Teleporter-Export abgeschlossen"

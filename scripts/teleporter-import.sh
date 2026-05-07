@@ -1,113 +1,74 @@
 #!/usr/bin/env bash
-set -euo pipefail
+# Teleporter import (follower): pulls latest backup from git, imports via API.
+# Runs only on dns2 (follower). Triggered nightly via cron at 03:30.
 
-# Import Pi-hole configuration via Teleporter API (v6) from Git.
-# Runs only on pihole-b (follower). Called nightly via cron at 03:30.
+set -euo pipefail
 
 REPO_DIR="/opt/homelab-dns"
 BACKUP_DIR="${REPO_DIR}/backups"
 BACKUP_FILE="${BACKUP_DIR}/teleporter-latest.zip"
-LOG_DIR="/var/log/pihole-sync"
+LOG_DIR="/var/log/dns-sync"
 LOG_FILE="${LOG_DIR}/import.log"
-MARKER_DIR="/var/lib/pihole-sync"
+MARKER_DIR="/var/lib/dns-sync"
 MARKER_FILE="${MARKER_DIR}/last-import"
 PIHOLE_URL="http://localhost:80"
 
 mkdir -p "$LOG_DIR" "$MARKER_DIR"
 
-log() {
-    local msg="[import] $(date '+%Y-%m-%d %H:%M:%S') $*"
-    echo "$msg" | tee -a "$LOG_FILE"
-}
+log() { echo "[import] $(date '+%F %T') $*" | tee -a "$LOG_FILE"; }
+die() { log "ERROR: $*"; exit 1; }
 
-error_exit() {
-    log "ERROR: $*"
-    exit 1
-}
-
-# --- Pre-flight checks ---
-
-CURRENT_HOSTNAME="$(hostname)"
-if [[ "$CURRENT_HOSTNAME" != "pihole-b" ]]; then
-    error_exit "This script must run on pihole-b (current hostname: ${CURRENT_HOSTNAME})"
-fi
+# ── Pre-flight ──
+[[ "$(hostname)" == "dns2" ]] || die "Dieses Skript muss auf dns2 laufen (aktuell: $(hostname))"
 
 ENV_FILE="${REPO_DIR}/compose/.env"
-if [[ ! -f "$ENV_FILE" ]]; then
-    error_exit ".env file not found at ${ENV_FILE}"
-fi
+[[ -f "$ENV_FILE" ]] || die ".env fehlt: $ENV_FILE"
 
 PIHOLE_PASSWORD="$(grep '^FTLCONF_webserver_api_password=' "$ENV_FILE" | cut -d'=' -f2-)"
-if [[ -z "$PIHOLE_PASSWORD" ]]; then
-    error_exit "FTLCONF_webserver_api_password not set in ${ENV_FILE}"
-fi
+[[ -n "$PIHOLE_PASSWORD" ]] || die "FTLCONF_webserver_api_password nicht in $ENV_FILE gesetzt"
 
-log "Starting Teleporter import..."
+log "Starte Teleporter-Import..."
 
-# --- Pull latest from Git ---
-
-log "Pulling latest changes from Git..."
+# ── Git pull ──
 cd "$REPO_DIR"
-git pull --ff-only \
-    || error_exit "git pull failed — check SSH deploy key and network connectivity"
+git pull --ff-only || die "git pull fehlgeschlagen"
 
-# --- Check if backup is newer than last import ---
+[[ -f "$BACKUP_FILE" ]] || die "Backup nicht gefunden: $BACKUP_FILE"
 
-if [[ ! -f "$BACKUP_FILE" ]]; then
-    error_exit "Backup file not found at ${BACKUP_FILE}"
-fi
-
-BACKUP_MTIME="$(stat -c%Y "$BACKUP_FILE")"
-
+# ── Marker pruefen ──
+BACKUP_MTIME=$(stat -c%Y "$BACKUP_FILE")
 if [[ -f "$MARKER_FILE" ]]; then
-    LAST_IMPORT="$(cat "$MARKER_FILE" | tr -d '[:space:]')"
+    LAST_IMPORT=$(tr -d '[:space:]' < "$MARKER_FILE")
     if [[ "$BACKUP_MTIME" -le "$LAST_IMPORT" ]]; then
-        log "Backup has not changed since last import (backup: ${BACKUP_MTIME}, last import: ${LAST_IMPORT}). Skipping."
+        log "Backup unveraendert seit letztem Import (mtime $BACKUP_MTIME <= $LAST_IMPORT) — skip"
         exit 0
     fi
 fi
+log "Neues Backup erkannt: $(stat -c%s "$BACKUP_FILE") bytes, mtime $BACKUP_MTIME"
 
-BACKUP_SIZE="$(stat -c%s "$BACKUP_FILE")"
-log "New backup found: ${BACKUP_SIZE} bytes, mtime ${BACKUP_MTIME}"
-
-# --- Authenticate with Pi-hole v6 API ---
-
-log "Authenticating with Pi-hole API..."
-AUTH_RESPONSE="$(curl -sS --fail-with-body \
-    -X POST \
-    -H "Content-Type: application/json" \
+# ── Auth ──
+AUTH_RESPONSE=$(curl -sS --fail-with-body \
+    -X POST -H "Content-Type: application/json" \
     -d "{\"password\":\"${PIHOLE_PASSWORD}\"}" \
-    "${PIHOLE_URL}/api/auth" 2>&1)" \
-    || error_exit "API authentication failed: ${AUTH_RESPONSE}"
+    "${PIHOLE_URL}/api/auth" 2>&1) || die "Auth fehlgeschlagen: $AUTH_RESPONSE"
 
-SID="$(echo "$AUTH_RESPONSE" | jq -r '.session.sid // empty')"
-if [[ -z "$SID" ]]; then
-    error_exit "Failed to extract session ID from auth response: ${AUTH_RESPONSE}"
-fi
+SID=$(echo "$AUTH_RESPONSE" | jq -r '.session.sid // empty')
+[[ -n "$SID" ]] || die "Konnte Session-ID nicht extrahieren: $AUTH_RESPONSE"
 
-log "Authenticated successfully."
-
-# --- Import Teleporter backup ---
-
-log "Importing Teleporter backup..."
-IMPORT_RESPONSE="$(curl -sS --fail-with-body \
-    -X POST \
-    -H "sid: ${SID}" \
+# ── Import ──
+log "Importiere Teleporter-Backup..."
+IMPORT_RESPONSE=$(curl -sS --fail-with-body \
+    -X POST -H "sid: ${SID}" \
     -F "file=@${BACKUP_FILE}" \
-    "${PIHOLE_URL}/api/teleporter" 2>&1)" \
-    || error_exit "Teleporter import request failed: ${IMPORT_RESPONSE}"
+    "${PIHOLE_URL}/api/teleporter" 2>&1) || die "Import fehlgeschlagen: $IMPORT_RESPONSE"
 
-log "Import API response: ${IMPORT_RESPONSE}"
+log "API-Antwort: $IMPORT_RESPONSE"
 
-# --- Invalidate session ---
+# ── Session schliessen ──
+curl -sS -X DELETE -H "sid: ${SID}" "${PIHOLE_URL}/api/auth" >/dev/null 2>&1 || true
 
-curl -sS -X DELETE \
-    -H "sid: ${SID}" \
-    "${PIHOLE_URL}/api/auth" >/dev/null 2>&1 || true
-
-# --- Update marker file ---
-
+# ── Marker aktualisieren ──
 echo "$BACKUP_MTIME" > "$MARKER_FILE"
-log "Updated import marker to ${BACKUP_MTIME}"
+log "Marker aktualisiert: $BACKUP_MTIME"
 
-log "Teleporter import completed successfully."
+log "Teleporter-Import abgeschlossen"
