@@ -724,7 +724,9 @@ run_phase2() {
     if [[ "$cur_ip" != "$IP" ]]; then
         log "Aktuelle IP '$cur_ip' != Soll-IP '$IP'. Reboote fuer sauberen Zustand."
         log "Resume-Service uebernimmt nach Boot. Reconnect: ssh root@$IP"
-        ( sleep 3 && systemctl reboot ) &
+        systemd-run --on-active=3s --unit=dns-bootstrap-reboot.service \
+            systemctl reboot 2>/dev/null \
+            || systemctl reboot
         exit 0
     fi
     log "IP korrekt: $cur_ip"
@@ -819,7 +821,10 @@ Nach ~3 Min ist $HOSTNAME komplett fertig.
 
         log "Phase 1 fertig — VM rebootet jetzt fuer sauberen IP-Wechsel"
         sync
-        ( sleep 5 && systemctl reboot ) &
+        # systemd-run laueft unabhaengig vom Skript-Ende und tee-Pipe
+        systemd-run --on-active=5s --unit=dns-bootstrap-reboot.service \
+            systemctl reboot 2>/dev/null \
+            || systemctl reboot
         exit 0
     fi
 
