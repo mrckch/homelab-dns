@@ -507,9 +507,11 @@ step_clone_repo() {
         echo "https://pat:${pat}@github.com" > /root/.git-credentials
         chmod 0600 /root/.git-credentials
     else
-        local ssh_url
-        ssh_url="git@github.com:${REPO_URL#*github.com/}.git"
-        ssh_url="${ssh_url%.git.git}.git"
+        local repo_path ssh_url
+        repo_path="${REPO_URL#*github.com/}"
+        repo_path="${repo_path%.git}"
+        ssh_url="git@github.com:${repo_path}.git"
+        log "Klone via SSH: $ssh_url"
         GIT_SSH_COMMAND="ssh -i $DEPLOY_KEY_FILE -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
             git clone "$ssh_url" "$REPO_DIR"
         cd "$REPO_DIR"
