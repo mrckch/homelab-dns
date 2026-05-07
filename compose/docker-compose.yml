@@ -36,3 +36,7 @@ services:
       - "8080:80/tcp"
     volumes:
       - ../recovery-site:/usr/share/caddy:ro
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./auth.snippet:/etc/caddy/auth.snippet:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

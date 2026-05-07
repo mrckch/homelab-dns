@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DNS Homelab — Admin</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+    <div class="brand">
+        <span class="brand-mark">●</span>
+        <span class="brand-text">DNS Homelab</span>
+        <span class="brand-host" id="brand-host">…</span>
+    </div>
+    <nav>
+        <a href="/">Status</a>
+        <a href="/ops.html">Operations</a>
+        <a href="/admin.html" class="active">Admin</a>
+    </nav>
+</header>
+
+<main>
+    <section>
+        <h2>Authentifizierung</h2>
+        <div class="card">
+            <div class="row">
+                <span class="label">Status</span>
+                <span class="value" id="auth-status">…</span>
+            </div>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.8rem;">
+                Bei aktivierter Auth fragt die Webseite (mit Ausnahme von <code>/system-status.json</code>
+                und <code>/metrics-history.json</code>) und alle API-Endpunkte nach Benutzername
+                <strong>admin</strong> + Passwort.
+            </p>
+        </div>
+    </section>
+
+    <section>
+        <h2 id="form-title">Passwort setzen</h2>
+        <div class="card">
+            <form id="pw-form">
+                <div class="form-row" id="row-current" style="display:none;">
+                    <label for="current">Aktuelles Passwort</label>
+                    <input type="password" id="current" autocomplete="current-password">
+                </div>
+                <div class="form-row">
+                    <label for="new">Neues Passwort (min. 6 Zeichen)</label>
+                    <input type="password" id="new" autocomplete="new-password" required minlength="6">
+                </div>
+                <div class="form-row">
+                    <label for="confirm">Bestaetigen</label>
+                    <input type="password" id="confirm" autocomplete="new-password" required minlength="6">
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn">Passwort setzen</button>
+                    <button type="button" class="btn btn-warn" id="btn-disable" style="display:none;">Auth deaktivieren</button>
+                </div>
+                <p class="form-msg" id="form-msg"></p>
+            </form>
+        </div>
+    </section>
+
+    <section>
+        <h2>Hinweise</h2>
+        <div class="card">
+            <ul class="compact">
+                <li>Passwort wird als bcrypt-Hash in <code>compose/.env</code> gespeichert</li>
+                <li>Nach Aenderung wird Caddy automatisch reloaded — Re-Login noetig</li>
+                <li>CLI-Alternative: <code>sudo /opt/homelab-dns/scripts/set-password.sh</code></li>
+                <li>Bei Auth-Verlust: per SSH einloggen, das CLI-Skript ohne Passwort ausfuehren (Auth deaktivieren)</li>
+            </ul>
+        </div>
+    </section>
+
+</main>
+
+<footer>
+    <span>DNS Homelab · <a href="https://github.com/mrckch/homelab-dns" target="_blank">GitHub</a></span>
+</footer>
+
+<script src="api.js"></script>
+<script>
+(function () {
+    var statusEl = document.getElementById('auth-status');
+    var formTitle = document.getElementById('form-title');
+    var rowCurrent = document.getElementById('row-current');
+    var btnDisable = document.getElementById('btn-disable');
+    var msgEl = document.getElementById('form-msg');
+    var form = document.getElementById('pw-form');
+
+    function setMsg(text, type) {
+        msgEl.textContent = text;
+        msgEl.className = 'form-msg' + (type ? ' msg-' + type : '');
+    }
+
+    fetch('/system-status.json?_=' + Date.now())
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+            document.getElementById('brand-host').textContent = d.hostname || '–';
+        })
+        .catch(function () {});
+
+    function refreshAuthStatus() {
+        api.authStatus().then(function (s) {
+            if (s.enabled) {
+                statusEl.innerHTML = '<span class="badge badge-ok">aktiv</span>';
+                formTitle.textContent = 'Passwort aendern';
+                rowCurrent.style.display = '';
+                document.getElementById('current').required = true;
+                btnDisable.style.display = '';
+            } else {
+                statusEl.innerHTML = '<span class="badge badge-warn">nicht aktiv</span>';
+                formTitle.textContent = 'Passwort setzen';
+                rowCurrent.style.display = 'none';
+                document.getElementById('current').required = false;
+                btnDisable.style.display = 'none';
+            }
+        }).catch(function (e) {
+            statusEl.innerHTML = '<span class="badge badge-error">API nicht erreichbar</span>';
+        });
+    }
+
+    refreshAuthStatus();
+
+    form.addEventListener('submit', function (ev) {
+        ev.preventDefault();
+        setMsg('');
+
+        var current = document.getElementById('current').value;
+        var newPw = document.getElementById('new').value;
+        var confirmPw = document.getElementById('confirm').value;
+
+        if (newPw !== confirmPw) {
+            setMsg('Passwoerter stimmen nicht ueberein', 'error');
+            return;
+        }
+        if (newPw.length < 6) {
+            setMsg('Passwort zu kurz (min. 6 Zeichen)', 'error');
+            return;
+        }
+
+        setMsg('Wird gespeichert…', 'info');
+
+        api.setPassword(current, newPw)
+            .then(function (r) {
+                setMsg('Passwort gesetzt. Caddy wurde reloaded — neue Anmeldung erforderlich.', 'ok');
+                form.reset();
+                setTimeout(refreshAuthStatus, 1000);
+            })
+            .catch(function (err) {
+                setMsg('Fehler: ' + err.message, 'error');
+            });
+    });
+
+    btnDisable.addEventListener('click', function () {
+        var current = document.getElementById('current').value;
+        if (!current) {
+            setMsg('Aktuelles Passwort eingeben um Auth zu deaktivieren', 'error');
+            return;
+        }
+        if (!confirm('Authentifizierung wirklich deaktivieren? Die Webseite ist danach OHNE Login erreichbar!')) return;
+
+        setMsg('Deaktiviere…', 'info');
+        api.disableAuth(current)
+            .then(function () {
+                setMsg('Auth deaktiviert.', 'ok');
+                form.reset();
+                setTimeout(refreshAuthStatus, 1000);
+            })
+            .catch(function (err) {
+                setMsg('Fehler: ' + err.message, 'error');
+            });
+    });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+[Unit]
+Description=DNS Homelab Management API
+Documentation=https://github.com/mrckch/homelab-dns
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/homelab-dns
+Environment="PYTHONUNBUFFERED=1"
+ExecStart=/usr/bin/uvicorn api.server:app --host 127.0.0.1 --port 8088 --no-access-log
+Restart=on-failure
+RestartSec=5s
+
+# Hardening (begrenzt, da wir docker und apt brauchen)
+NoNewPrivileges=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+
+[Install]
+WantedBy=multi-user.target

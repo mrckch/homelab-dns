@@ -1,0 +1,31 @@
+# Caddyfile fuer DNS Homelab Recovery-Site
+#
+# Routen:
+#   /api/*       -> reverse proxy zum homelab-api auf dem Host (Port 8088)
+#   /system-status.json + /metrics-history.json -> public (kein Auth, fuer Auto-Refresh)
+#   alles andere -> static files mit optionalem Basic-Auth (siehe auth.snippet)
+
+:80 {
+	encode gzip
+
+	# API zum Host weiterleiten (homelab-api systemd-service)
+	handle_path /api/* {
+		reverse_proxy host.docker.internal:8088
+	}
+
+	# Status-Daten ohne Auth (sonst kann das Dashboard sich nicht aktualisieren)
+	@public {
+		path /system-status.json /metrics-history.json
+	}
+	handle @public {
+		root * /usr/share/caddy
+		file_server
+	}
+
+	# Alles andere: statische Files + optionaler Auth-Layer aus auth.snippet
+	handle {
+		root * /usr/share/caddy
+		file_server
+		import auth.snippet
+	}
+}
